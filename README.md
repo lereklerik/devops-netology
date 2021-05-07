@@ -1,1 +1,1 @@
-# devops-netology
+# devops-netologydevops-netology exercise
