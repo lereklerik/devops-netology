@@ -35,4 +35,4 @@ recorded ignoring files in git
 # Репозитории
  * github: https://github.com/lereklerik/devops-netology
  * gitlab: https://gitlab.com/tulyakova.v.e/devops-netology
- * bitbucket: https://bitbucket.org/lerekler/workspace/projects/NET
+ * bitbucket: https://bitbucket.org/lerekler/devops-netology/src/main/
