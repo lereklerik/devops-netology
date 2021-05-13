@@ -1,3 +1,6 @@
+# devops-netologydevops-netology exercise
+recorded ignoring files in git
+added new line
 ﻿# Devops-netology exercise
 
 ### 1. Игнорирование локальных директорий с названием ".terraform"
