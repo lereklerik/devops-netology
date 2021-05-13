@@ -32,3 +32,10 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+# Ignore idea-files
+*.idea
+*.iml
+target/
+/com
+/idea
+.idea
