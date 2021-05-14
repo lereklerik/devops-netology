@@ -36,3 +36,8 @@ recorded ignoring files in git
  * github: https://github.com/lereklerik/devops-netology
  * gitlab: https://gitlab.com/tulyakova.v.e/devops-netology
  * bitbucket: https://bitbucket.org/lerekler/devops-netology/src/main/
+
+# Домашнее задание к занятию "2.3. Ветвления в Git"
+## Network graph in github
+ * https://github.com/lereklerik/devops-netology/network
+ * скрин терминала: ![finish pic](https://ibb.co/XxZwGGw)
