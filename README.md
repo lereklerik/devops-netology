@@ -40,4 +40,4 @@ recorded ignoring files in git
 # Домашнее задание к занятию "2.3. Ветвления в Git"
 ## Network graph in github
  * https://github.com/lereklerik/devops-netology/network
- * скрин терминала: ![finish pic](https://ibb.co/XxZwGGw)
+ * скрин терминала: https://ibb.co/XxZwGGw
