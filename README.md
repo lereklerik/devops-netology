@@ -92,6 +92,55 @@ vagrant@vagrant:~$ systemctl status runscript.service
 
     lines 1-19/19 (END)
 
+###   Предусмотрите возможность добавления опций к запускаемому процессу через внешний файл (посмотрите, например, на systemctl cat cron)?
+
+*   Создадим файл node_exporter в `/etc/default/`:
+```shell
+vagrant@vagrant:~$ cat /etc/default/node_exporter 
+testVar='test_DevOps'
+```    
+*   Добавим в runscript.service указание на наш файл 
+```shell
+[Unit]
+Description=My Script Service
+After=multi-user.target
+[Service]
+Type=idle
+ExecStart=/home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
+EnvironmentFile=-/etc/default/node_exporter
+[Install]
+WantedBy=multi-user.target
+```
+*   После перезагрузки смотрим состояние сервиса и по PID находим заданные переменные окружения:
+```shell
+vagrant@vagrant:~$ systemctl status runscript.service
+● runscript.service - My Script Service
+     Loaded: loaded (/lib/systemd/system/runscript.service; enabled; vendor preset: enabled)
+     Active: active (running) since Tue 2021-06-08 20:28:21 UTC; 41s ago
+   Main PID: 796 (node_exporter)
+      Tasks: 3 (limit: 1074)
+     Memory: 12.6M
+     CGroup: /system.slice/runscript.service
+             └─796 /home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
+
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=thermal_zone
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=time
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=timex
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=udp_queues
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=uname
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=vmstat
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=xfs
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=zfs
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:195 msg="Listening on" address=:9100
+Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.402Z caller=tls_config.go:191 msg="TLS is disabled." http2=false
+```
+```shell
+vagrant@vagrant:~$ sudo cat /proc/796/environ 
+LANG=en_US.UTF-8LANGUAGE=en_US:PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/binINVOCATION_ID=13461c45557b41919f855dc37263df4e
+JOURNAL_STREAM=9:24191testVar=test_DevOps
+```
+*   У нас появилась новая переменная окружения `test` со значением `test_DevOps`
+
 ## 2. Ознакомьтесь с опциями node_exporter и выводом /metrics по-умолчанию. Приведите несколько опций, которые вы бы выбрали для базового мониторинга хоста по CPU, памяти, диску и сети.
 
         --collector.cpu            Enable the cpu collector (default: enabled). /* Собирает статистику использования процессора */                       
