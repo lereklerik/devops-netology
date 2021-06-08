@@ -99,6 +99,11 @@ vagrant@vagrant:~$ systemctl status runscript.service
 vagrant@vagrant:~$ cat /etc/default/node_exporter 
 testVar='test_DevOps'
 ```    
+*   И выдадим права на исполнение:
+```shell
+vagrant@vagrant:/etc/default$ sudo chmod u+x node_exporter
+``` 
+
 *   Добавим в runscript.service указание на наш файл 
 ```shell
 [Unit]
