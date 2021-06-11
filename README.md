@@ -146,6 +146,53 @@ JOURNAL_STREAM=9:24191testVar=test_DevOps
 ```
 *   У нас появилась новая переменная окружения `test` со значением `test_DevOps`
 
+
+### Обновление задания по замечанию
+
+*   Сервис скорректировала:
+```shell
+vagrant@vagrant:/lib/systemd/system$ cat runscript.service 
+[Unit]
+Description=My Script Service
+After=multi-user.target runscript.service
+[Service]
+Type=idle
+EnvironmentFile=-/etc/default/node_exporter
+ExecStart=/home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter $ARG1
+Restart=Always
+[Install]
+WantedBy=multi-user.target
+```
+*   Скорректировала `/etc/default/node_exporter`:
+```shell
+vagrant@vagrant:/etc/default$ cat node_exporter 
+#testVar='test_DevOps'
+ARG1=--collector.cpu.info
+```
+*   Запускаю систему:
+```shell
+vagrant@vagrant:~$ sudo systemctl status runscript.service 
+● runscript.service - My Script Service
+     Loaded: loaded (/lib/systemd/system/runscript.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2021-06-11 07:22:53 UTC; 3min 27s ago
+   Main PID: 798 (node_exporter)
+      Tasks: 4 (limit: 1074)
+     Memory: 12.8M
+     CGroup: /system.slice/runscript.service
+             └─798 /home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter --collector.cpu.info
+
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=thermal_zone
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=time
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=timex
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=udp_queues
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=uname
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=vmstat
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=xfs
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=zfs
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.427Z caller=node_exporter.go:195 msg="Listening on" address=:9100
+Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.429Z caller=tls_config.go:191 msg="TLS is disabled." http2=false
+```
+
 ## 2. Ознакомьтесь с опциями node_exporter и выводом /metrics по-умолчанию. Приведите несколько опций, которые вы бы выбрали для базового мониторинга хоста по CPU, памяти, диску и сети.
 
         --collector.cpu            Enable the cpu collector (default: enabled). /* Собирает статистику использования процессора */                       
