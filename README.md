@@ -1,324 +1,670 @@
-# Домашнее задание к занятию "3.4. Операционные системы, лекция 2"
+# Домашнее задание к занятию "3.5. Файловые системы"
 
-## 1. Используя знания из лекции по systemd, создайте самостоятельно простой unit-файл для node_exporter
+## 1. Узнайте о `sparse` (разряженных) файлах
 
-*   Необходимо было скачать архивы с `prometheus` и `node_exporter`:
+    *   Разреженные – это специальные файлы, которые с большей эффективностью используют файловую систему, 
+        они не позволяют ФС занимать свободное дисковое пространство носителя, когда разделы не заполнены. 
+        То есть, «пустое место» будет задействовано только при необходимости. Пустая информация в виде нулей, 
+        будет хранится в блоке метаданных ФС. Поэтому, разреженные файлы изначально занимают меньший объем носителя, 
+        чем их реальный объем.
+
+Поэкспериментируем:
 ```shell
-$ wget https://github.com/prometheus/prometheus/releases/download/v2.27.1/prometheus-2.27.1.linux-amd64.tar.gz
-$ tar xvf prometheus-2.27.1.linux-amd64.tar.gz
+# создадим разреженный файл, размером 20 Мб 
+# (возможно, можно было бы экспериментировать с бОльшим размером, далее было бы нагляднее)
+vagrant@vagrant:~$ truncate -s20M file-sparse
+vagrant@vagrant:~$ file file-sparse 
+file-sparse: data
+vagrant@vagrant:~$ du -h --apparent-size file-sparse 
+20M	file-sparse
+#
+# после того, как создали разреженный файл, видим, что размер под него сразу задан
+#
+vagrant@vagrant:~$ stat file-sparse 
+  File: file-sparse
+  Size: 20971520  	Blocks: 0          IO Block: 4096   regular file
+Device: fd00h/64768d	Inode: 2883656     Links: 1
+Access: (0664/-rw-rw-r--)  Uid: ( 1000/ vagrant)   Gid: ( 1000/ vagrant)
+Access: 2021-06-15 17:19:31.049758375 +0000
+Modify: 2021-06-15 17:18:37.497757832 +0000
+Change: 2021-06-15 17:18:37.497757832 +0000
+ Birth: -
+vagrant@vagrant:~$ touch test_file_new
+#
+# а вот обычный пустой файл ничего весит
+#
+vagrant@vagrant:~$ stat test_file_new 
+  File: test_file_new
+  Size: 0         	Blocks: 0          IO Block: 4096   regular empty file
+Device: fd00h/64768d	Inode: 2883660     Links: 1
+Access: (0664/-rw-rw-r--)  Uid: ( 1000/ vagrant)   Gid: ( 1000/ vagrant)
+Access: 2021-06-15 17:23:21.657760713 +0000
+Modify: 2021-06-15 17:23:21.657760713 +0000
+Change: 2021-06-15 17:23:21.657760713 +0000
+ Birth: -
+#
+# добавим ему немного данных размером в 15 кб
+#
+vagrant@vagrant:~$ echo 'test test test' >>test_file_new 
+vagrant@vagrant:~$ stat test_file_new 
+  File: test_file_new
+  Size: 15        	Blocks: 8          IO Block: 4096   regular file
+Device: fd00h/64768d	Inode: 2883660     Links: 1
+Access: (0664/-rw-rw-r--)  Uid: ( 1000/ vagrant)   Gid: ( 1000/ vagrant)
+Access: 2021-06-15 17:23:45.693760957 +0000
+Modify: 2021-06-15 17:24:00.085761103 +0000
+Change: 2021-06-15 17:24:00.085761103 +0000
+ Birth: -
+vagrant@vagrant:~$ ls -lsh test_file_new 
+4.0K -rw-rw-r-- 1 vagrant vagrant 15 Jun 15 17:24 test_file_new
+#
+# и такую же операцию провернем с разреженным, его размер также увеличился на 15 кб
+#
+vagrant@vagrant:~$ echo 'test test test' >>file-sparse 
+vagrant@vagrant:~$ stat file-sparse 
+  File: file-sparse
+  Size: 20971535  	Blocks: 8          IO Block: 4096   regular file
+Device: fd00h/64768d	Inode: 2883656     Links: 1
+Access: (0664/-rw-rw-r--)  Uid: ( 1000/ vagrant)   Gid: ( 1000/ vagrant)
+Access: 2021-06-15 17:29:12.489764270 +0000
+Modify: 2021-06-15 17:28:30.305763842 +0000
+Change: 2021-06-15 17:28:30.305763842 +0000
+ Birth: -
 ```
 
-```shell  
-$ wget https://github.com/prometheus/node_exporter/releases/download/v1.1.2/node_exporter-1.1.2.linux-amd64.tar.gz
-$ tar xvfz node_exporter-1.1.2.linux-amd64.tar.gz
+*   Среди обсуждаемых проблем и вопросов о `sparse`, наткнулась на то, что объемные файлы 
+    очень долго "просматриваются", если мы хотим их прочитать (с начала или конца). 
+    Поэтому решила сравнить просмотр файлов с конца, сколько займет это по времени в наносекундах
+```shell
+# разреженный файл - проход занял 0,63 секунды (627084645 наносекунд)
+# конечно, с более объемным файлом было бы нагляднее
+vagrant@vagrant:~$ date +%T.%N; tail -n 20 file-sparse; date +%T.%N
+17:39:12.708901821
+test test test
+17:39:13.335986466
+# обычный файл - проход занял 0,0039 секунды (3918743 наносекунд)
+vagrant@vagrant:~$ date +%T.%N; tail -n 20 test_file_new; date +%T.%N
+17:39:22.109751296
+test test test
+17:39:22.113670039
 ```    
+* Время существенно увеличилось при просмотре файлов, казалось бы, с одинаковым содержимым. 
+  Просмотр нулевых байтов занимает много времени
 
-*   Настраиваем `prometheus` и `node_exporter`. В `prometheus.yml` добавляем:
+## 2. Могут ли файлы, являющиеся жесткой ссылкой на один объект, иметь разные права доступа и владельца? Почему?
+
+*   У объекта в файловой системе (далее -- ФС) есть первичный идентификатор - `inode`, и это *не имя файла*.
+*   В рамках одной ФС может быть создано более одного файла с одним и тем же `inode` и разными именами. Например:
+
+```shell
+# создадим файл
+vagrant@vagrant:~$ touch test_file
+# проверим число ссылок на него
+vagrant@vagrant:~$ stat --format=%h test_file 
+1
+# создадим ещё одну жесткую ссылку на файл
+vagrant@vagrant:~$ ln test_file test_hl_tf
+# уточним число ссылок на файл, их стало две
+vagrant@vagrant:~$ stat --format=%h test_file 
+2
+# посмотрим первичные идентификаторы, на которые ссылаются наши файлы
+vagrant@vagrant:~$ stat --format=%i test_file; stat --format=%i test_hl_tf 
+2883655
+2883655
+# уточним права доступа
+vagrant@vagrant:~$ ls -ilh | grep "test_"
+2883655 -rw-rw-r-- 2 vagrant vagrant    0 Jun 15 15:48 test_file
+2883655 -rw-rw-r-- 2 vagrant vagrant    0 Jun 15 15:48 test_hl_tf
+# скорректируем права доступа для test_hl_tf и ещё раз проверим их
+vagrant@vagrant:~$ sudo chmod 0755 test_hl_tf
+vagrant@vagrant:~$ ls -ilh | grep "test_"
+2883655 -rwxr-xr-x 2 vagrant vagrant    0 Jun 15 15:48 test_file
+2883655 -rwxr-xr-x 2 vagrant vagrant    0 Jun 15 15:48 test_hl_tf
+```
+*   Таким образом, владелец и права доступа не могут быть разными у объекта и жестких ссылок на него.
+*   Если мы удалим оригинальный `test_file`, то объект все равно продолжит существование на ФС, т.к.
+    на него присутствует жесткая ссылка:
     
-```yml
-global:
-    scrape_interval: 15s
-scrape_configs:
-  - job_name: 'node'
-    file_sd_configs:
-      - files:
-         - 'targets.json'
-    static_configs:
-    - targets: ['localhost:9100']
-```
-        
-    
-*   Создаем targets.json:    
-```json
-[
-  {
-    "labels": {
-      "job": "node"
-    },
-    "targets": [
-      "localhost:9100"
-    ]
-  }
-]
-```
-
-*   Инициализируем конфигурационный файл:
-```commandline  
-./prometheus --config.file=./prometheus.yml
-```
-    
-*   Далее, создаем файл `.service`:
 ```shell
-/lib/systemd/system$ sudo vi runscript.service
+vagrant@vagrant:~$ rm test_file 
+vagrant@vagrant:~$ stat --format=%h,inode=%i test_hl_tf 
+1,inode=2883655
 ```
-    
-*   Его содержимое:
+*   Каждая из жестких ссылок -- это отдельный файл, но ведут они к одному участку жесткого диска. 
+    Файл можно перемещать между каталогами, и все ссылки останутся рабочими, поскольку для них неважно имя.
+
+## 3. Сделайте `vagrant destroy` на имеющийся инстанс Ubuntu. Замените содержимое Vagrantfile. Данная конфигурация создаст новую виртуальную машину с двумя дополнительными неразмеченными дисками по 2.5 Гб.
+
+*   После изменения конфигурации выведем список устройств:
 ```shell
-[Unit]
-Description=My Script Service
-After=multi-user.target
-[Service]
-Type=idle
-ExecStart=/home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
-[Install]
-WantedBy=multi-user.target
+root@vagrant:/home/vagrant# lsblk
+NAME                 MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sda                    8:0    0   64G  0 disk 
+├─sda1                 8:1    0  512M  0 part /boot/efi
+├─sda2                 8:2    0    1K  0 part 
+└─sda5                 8:5    0 63.5G  0 part 
+  ├─vgvagrant-root   253:0    0 62.6G  0 lvm  /
+  └─vgvagrant-swap_1 253:1    0  980M  0 lvm  [SWAP]
+sdb                    8:16   0  2.5G  0 disk 
+sdc                    8:32   0  2.5G  0 disk 
 ```
-* Рестарт системы и просмотр статуса сервиса после её запуска:
+## 4. Используя `fdisk`, разбейте первый диск на 2 раздела: 2 Гб, оставшееся пространство.
 
+*   Перейдем в интерактивный режим `fdisk`:
 ```shell
-vagrant@vagrant:~$ systemctl status runscript.service
+root@vagrant:/home/vagrant# fdisk /dev/sdb
+
+Welcome to fdisk (util-linux 2.34).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+Device does not contain a recognized partition table.
+Created a new DOS disklabel with disk identifier 0x8f716b04.
 ```
-
-     ● runscript.service - My Script Service
-    Loaded: loaded (/lib/systemd/system/runscript.service; enabled; vendor preset: enabled)
-    Active: active (running) since Thu 2021-06-03 20:06:08 UTC; 4min 10s ago
-    Main PID: 789 (node_exporter)
-    Tasks: 4 (limit: 1074)
-    Memory: 12.6M
-    CGroup: /system.slice/runscript.service
-         └─789 /home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
-
-
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:113 collec> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.302Z | caller=node_exporter.go:195 msg="L> |
-    | Jun 03 20:06:08 | vagrant | node_exporter[789]: | level=info |  ts=2021-06-03T20:06:08.303Z | caller=tls_config.go:191 msg="TLS > |
-
-    lines 1-19/19 (END)
-
-###   Предусмотрите возможность добавления опций к запускаемому процессу через внешний файл (посмотрите, например, на systemctl cat cron)?
-
-*   Создадим файл node_exporter в `/etc/default/`:
+*   Создадим новую таблицу разделов MBR:
 ```shell
-vagrant@vagrant:~$ cat /etc/default/node_exporter 
-testVar='test_DevOps'
-```    
-*   И выдадим права на исполнение:
-```shell
-vagrant@vagrant:/etc/default$ sudo chmod u+x node_exporter
-``` 
-
-*   Добавим в runscript.service указание на наш файл 
-```shell
-[Unit]
-Description=My Script Service
-After=multi-user.target
-[Service]
-Type=idle
-ExecStart=/home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
-EnvironmentFile=-/etc/default/node_exporter
-[Install]
-WantedBy=multi-user.target
+Command (m for help): o
+Created a new DOS disklabel with disk identifier 0xba58eeb4.
 ```
-*   После перезагрузки смотрим состояние сервиса и по PID находим заданные переменные окружения:
+*   Создадим разделы:
 ```shell
-vagrant@vagrant:~$ systemctl status runscript.service
-● runscript.service - My Script Service
-     Loaded: loaded (/lib/systemd/system/runscript.service; enabled; vendor preset: enabled)
-     Active: active (running) since Tue 2021-06-08 20:28:21 UTC; 41s ago
-   Main PID: 796 (node_exporter)
-      Tasks: 3 (limit: 1074)
-     Memory: 12.6M
-     CGroup: /system.slice/runscript.service
-             └─796 /home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter
+Command (m for help): n
+Partition type
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended (container for logical partitions)
+Select (default p): p
+Partition number (1-4, default 1): 1
+First sector (2048-5242879, default 2048): 2048
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-5242879, default 5242879): +2G
 
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=thermal_zone
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=time
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=timex
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=udp_queues
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=uname
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=vmstat
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=xfs
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:113 collector=zfs
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.401Z caller=node_exporter.go:195 msg="Listening on" address=:9100
-Jun 08 20:28:21 vagrant node_exporter[796]: level=info ts=2021-06-08T20:28:21.402Z caller=tls_config.go:191 msg="TLS is disabled." http2=false
+Created a new partition 1 of type 'Linux' and of size 2 GiB.
+Command (m for help): n       
+Partition type
+   p   primary (1 primary, 0 extended, 3 free)
+   e   extended (container for logical partitions)
+Select (default p): p
+Partition number (2-4, default 2): 2
+First sector (4196352-5242879, default 4196352): 4196352
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (4196352-5242879, default 5242879): 5242879
+
+Created a new partition 2 of type 'Linux' and of size 511 MiB.
 ```
+*   Посмотрим, что в итоге:
 ```shell
-vagrant@vagrant:~$ sudo cat /proc/796/environ 
-LANG=en_US.UTF-8LANGUAGE=en_US:PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/binINVOCATION_ID=13461c45557b41919f855dc37263df4e
-JOURNAL_STREAM=9:24191testVar=test_DevOps
-```
-*   У нас появилась новая переменная окружения `test` со значением `test_DevOps`
 
-
-### Обновление задания по замечанию
-
-*   Сервис скорректировала:
-```shell
-vagrant@vagrant:/lib/systemd/system$ cat runscript.service 
-[Unit]
-Description=My Script Service
-After=multi-user.target runscript.service
-[Service]
-Type=idle
-EnvironmentFile=-/etc/default/node_exporter
-ExecStart=/home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter $ARG1
-Restart=Always
-[Install]
-WantedBy=multi-user.target
-```
-*   Скорректировала `/etc/default/node_exporter`:
-```shell
-vagrant@vagrant:/etc/default$ cat node_exporter 
-#testVar='test_DevOps'
-ARG1=--collector.cpu.info
-```
-*   Запускаю систему:
-```shell
-vagrant@vagrant:~$ sudo systemctl status runscript.service 
-● runscript.service - My Script Service
-     Loaded: loaded (/lib/systemd/system/runscript.service; enabled; vendor preset: enabled)
-     Active: active (running) since Fri 2021-06-11 07:22:53 UTC; 3min 27s ago
-   Main PID: 798 (node_exporter)
-      Tasks: 4 (limit: 1074)
-     Memory: 12.8M
-     CGroup: /system.slice/runscript.service
-             └─798 /home/vagrant/node_exporter-1.1.2.linux-amd64/node_exporter --collector.cpu.info
-
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=thermal_zone
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=time
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=timex
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=udp_queues
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=uname
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=vmstat
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=xfs
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.422Z caller=node_exporter.go:113 collector=zfs
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.427Z caller=node_exporter.go:195 msg="Listening on" address=:9100
-Jun 11 07:22:53 vagrant node_exporter[798]: level=info ts=2021-06-11T07:22:53.429Z caller=tls_config.go:191 msg="TLS is disabled." http2=false
+Command (m for help): p
+Disk /dev/sdb: 2.51 GiB, 2684354560 bytes, 5242880 sectors
+Disk model: VBOX HARDDISK   
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0xba58eeb4
+# разделы создались
+Device     Boot   Start     End Sectors  Size Id Type
+/dev/sdb1          2048 4196351 4194304    2G 83 Linux
+/dev/sdb2       4196352 5242879 1046528  511M 83 Linux
 ```
 
-## 2. Ознакомьтесь с опциями node_exporter и выводом /metrics по-умолчанию. Приведите несколько опций, которые вы бы выбрали для базового мониторинга хоста по CPU, памяти, диску и сети.
+## 5. Используя `sfdisk`, перенесите данную таблицу разделов на второй диск.
 
-        --collector.cpu            Enable the cpu collector (default: enabled). /* Собирает статистику использования процессора */                       
-        --collector.cpufreq        Enable the cpufreq collector (default: enabled). /* Собирает статистику частоты процессора */
-        --collector.diskstats      Enable the diskstats collector (default: enabled). /* Собирает статистику дискового ввода-вывода */
-        --collector.edac           Enable the edac collector (default: enabled). /* Собирает статистику обнаружения и исправления ошибок*/
-        --collector.filesystem     Enable the filesystem collector (default: enabled). /* Собирает статистику по файловой системе */
-        --collector.meminfo        Enable the meminfo collector (default: enabled). /* Собирает статистику использования оперативной памяти */
-        --collector.vmstat         Enable the vmstat collector (default: enabled). /* Собирает статистику процессов из /proc/vmstat */      
-        --collector.schedstat      Enable the schedstat collector (default: enabled). /* Собирает статистику планировщика задач */
-
-## 3. Ознакомьтесь с метриками, которые по умолчанию собираются Netdata и с комментариями, которые даны к этим метрикам.
-
-*   Подключение к `localhost:19999` (Скриншоты экрана):
-    > Для "показательной" нагрузки запускала `sysbench`:
-    ```shell
-    $ sysbench --num-threads=4 --test=cpu run
-    ```
-
-*   [![1 pic](//https://bikepower.ddns.net/index.php/s/2scywbX5opPiwMZ)](https://bikepower.ddns.net/index.php/s/2scywbX5opPiwMZ)
-*   [![2 pic](//https://bikepower.ddns.net/index.php/s/kc447JkKSrXzNi2)](https://bikepower.ddns.net/index.php/s/kc447JkKSrXzNi2)
-*   [![3 pic](//https://bikepower.ddns.net/index.php/s/fx6KaE2Ey9X89Xt)](https://bikepower.ddns.net/index.php/s/fx6KaE2Ey9X89Xt)
-*   [![4 pic](//https://bikepower.ddns.net/index.php/s/prkkf2HL4ZsRNns)](https://bikepower.ddns.net/index.php/s/prkkf2HL4ZsRNns)
-
-
-## 4. Можно ли по выводу `dmesg` понять, осознает ли ОС, что загружена не на настоящем оборудовании, а на системе виртуализации?
-
-*   Т.к. на домашнем ПК установлен Linux Mint, проверить разницу в выводе `dmesg` можно элементарно. 
-    Посмотрев результат выполнения просто команды `dmesg` выполняю поиск по слову `virtual`:
-
--   *vagrant*
+*   Перенесем:
 ```shell
-vagrant@vagrant:~$ dmesg | grep virtual
-[    0.001498] CPU MTRRs all blank - virtualized system.
-[    0.038795] Booting paravirtualized kernel on KVM
-[    0.176881] Performance Events: PMU not available due to virtualization, using software events only.
-[    2.322434] systemd[1]: Detected virtualization oracle.
+root@vagrant:/# sfdisk -d /dev/sdb | sfdisk --force /dev/sdc
+Checking that no-one is using this disk right now ... OK
+
+Disk /dev/sdc: 2.51 GiB, 2684354560 bytes, 5242880 sectors
+Disk model: VBOX HARDDISK   
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+
+>>> Script header accepted.
+>>> Script header accepted.
+>>> Script header accepted.
+>>> Script header accepted.
+>>> Created a new DOS disklabel with disk identifier 0xba58eeb4.
+/dev/sdc1: Created a new partition 1 of type 'Linux' and of size 2 GiB.
+/dev/sdc2: Created a new partition 2 of type 'Linux' and of size 511 MiB.
+/dev/sdc3: Done.
+
+New situation:
+Disklabel type: dos
+Disk identifier: 0xba58eeb4
+
+Device     Boot   Start     End Sectors  Size Id Type
+/dev/sdc1          2048 4196351 4194304    2G 83 Linux
+/dev/sdc2       4196352 5242879 1046528  511M 83 Linux
+
+The partition table has been altered.
+Calling ioctl() to re-read partition table.
+Syncing disks.
 ```
-         Все диапазонные регистры памяти пустые, т.к. это виртуальная система;
-         Происходит загрузка паравиртуализированного ядра в Kernel-based Virtual Machine;
-         Модуль управления питания недоступен из-за виртуализации, используются event'ы ПО;
-         systemd: обнаружена виртуализация oracle.
-
--   *Linux Mint (дом.ПК)*
+*   Посмотрим результат:
 ```shell
-~$ dmesg | grep virtual
-[    0.027717] Booting paravirtualized kernel on bare hardware
+root@vagrant:/# lsblk
+NAME                 MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sda                    8:0    0   64G  0 disk 
+├─sda1                 8:1    0  512M  0 part /boot/efi
+├─sda2                 8:2    0    1K  0 part 
+└─sda5                 8:5    0 63.5G  0 part 
+  ├─vgvagrant-root   253:0    0 62.6G  0 lvm  /
+  └─vgvagrant-swap_1 253:1    0  980M  0 lvm  [SWAP]
+sdb                    8:16   0  2.5G  0 disk 
+├─sdb1                 8:17   0    2G  0 part 
+└─sdb2                 8:18   0  511M  0 part 
+sdc                    8:32   0  2.5G  0 disk 
+├─sdc1                 8:33   0    2G  0 part 
+└─sdc2                 8:34   0  511M  0 part
+```
+*   И немного подробнее:
+```shell
+...
+Disk /dev/sdb: 2.51 GiB, 2684354560 bytes, 5242880 sectors
+Disk model: VBOX HARDDISK   
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0xba58eeb4
+
+Device     Boot   Start     End Sectors  Size Id Type
+/dev/sdb1          2048 4196351 4194304    2G 83 Linux
+/dev/sdb2       4196352 5242879 1046528  511M 83 Linux
+
+
+Disk /dev/sdc: 2.51 GiB, 2684354560 bytes, 5242880 sectors
+Disk model: VBOX HARDDISK   
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0xba58eeb4
+
+Device     Boot   Start     End Sectors  Size Id Type
+/dev/sdc1          2048 4196351 4194304    2G 83 Linux
+/dev/sdc2       4196352 5242879 1046528  511M 83 Linux
 ...
 ```
-         Загрузка ядра происходит на чистом железе
 
-Таким образом, ОС осознает, что она виртуальная (:
+## 6. Соберите `mdadm RAID1` на паре разделов 2 Гб.
 
-## 5. Как настроен sysctl fs.nr_open на системе по-умолчанию? Узнайте, что означает этот параметр. Какой другой существующий лимит не позволит достичь такого числа (ulimit --help)?
-
+*   Соберем с `mdadm` с подробным `--verbose` описанием происходящего
 ```shell
-vagrant@vagrant:~$ /sbin/sysctl -n fs.nr_open
-1048576
+root@vagrant:/# mdadm --create --verbose /dev/md1 --level=1 -n 2 /dev/sdb1 /dev/sdc1
+mdadm: Note: this array has metadata at the start and
+    may not be suitable as a boot device.  If you plan to
+    store '/boot' on this device please ensure that
+    your boot-loader understands md/v1.x metadata, or use
+    --metadata=0.90
+mdadm: size set to 2094080K
+Continue creating array? y
+mdadm: Defaulting to version 1.2 metadata
+mdadm: array /dev/md1 started.
 ```
-        1048576 - максимально возможное количество открытых дексрипторов для ядра системы. 
-        Если не менять его, то для пользователя задать значение больше этого числа не получится
-
+* Результат:
 ```shell
-vagrant@vagrant:/sbin$ ulimit -Sn
-1024
+root@vagrant:/# cat /proc/mdstat
+Personalities : [linear] [multipath] [raid0] [raid1] [raid6] [raid5] [raid4] [raid10] 
+md1 : active raid1 sdc1[1] sdb1[0]
+      2094080 blocks super 1.2 [2/2] [UU]
 ```
---------------------------------------------
-    мягкий лимит для пользователя, может быть увеличен в процессе работы (аналогично ulimit -n)
-```shell
-vagrant@vagrant:/sbin$ ulimit -Hn
-1048576
-```
---------------------------------------------
-    жесткий лимит для пользователя, предел не может увеличиваться, только уменьшаться
-
-Оба варианта не могут превысить системный лимит `fs.nr_open`
-
-## 6. Запустите любой долгоживущий процесс (не ls, который отработает мгновенно, а, например, sleep 1h) в отдельном неймспейсе процессов; покажите, что ваш процесс работает под PID 1 через nsenter. 
+## 7. Соберите `mdadm RAID0` на второй паре маленьких разделов.
 
 ```shell
-vagrant@vagrant:~$ sudo unshare -f --pid --mount-proc top
+root@vagrant:/# mdadm --create --verbose /dev/md0 --level=1 -n 2 /dev/sdb2 /dev/sdc2
+mdadm: Note: this array has metadata at the start and
+    may not be suitable as a boot device.  If you plan to
+    store '/boot' on this device please ensure that
+    your boot-loader understands md/v1.x metadata, or use
+    --metadata=0.90
+mdadm: size set to 522240K
+Continue creating array? y
+mdadm: Defaulting to version 1.2 metadata
+mdadm: array /dev/md0 started.
 ```
+*   Результат:
 ```shell
-vagrant@vagrant:~$ ps aux | grep top
-root        3622  0.0  0.4  11856  4580 pts/4    S+   18:49   0:00 sudo unshare -f --pid --mount-proc top
-root        3624  0.0  0.0   8080   592 pts/4    S+   18:49   0:00 unshare -f --pid --mount-proc top
-root        3625  0.0  0.3  11712  3824 pts/4    S+   18:49   0:00 top
-vagrant     3681  0.0  0.0   8900   672 pts/7    S+   18:49   0:00 grep --color=auto top
-```
-```shell
-vagrant@vagrant:~$ sudo nsenter --target 3625 --pid --mount
-root@vagrant:/# vagrant
--bash: vagrant: command not found
-root@vagrant:/# ps aux
-USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
-root           1  0.0  0.3  11712  3824 pts/4    S+   18:49   0:00 top
-root           2  0.0  0.3   9836  3940 pts/7    S    18:50   0:00 -bash
-root          12  0.0  0.3  11492  3420 pts/7    R+   18:50   0:00 ps aux
+root@vagrant:/# cat /proc/mdstat
+Personalities : [linear] [multipath] [raid0] [raid1] [raid6] [raid5] [raid4] [raid10] 
+md0 : active raid1 sdc2[1] sdb2[0]
+      522240 blocks super 1.2 [2/2] [UU]
+      
+md1 : active raid1 sdc1[1] sdb1[0]
+      2094080 blocks super 1.2 [2/2] [UU]
 ```
 
-## 7. Найдите информацию о том, что такое `:(){ :|:& };:`. Запустите эту команду в своей виртуальной машине Vagrant с Ubuntu 20.04 (это важно, поведение в других ОС не проверялось). Некоторое время все будет "плохо", после чего (минуты) – ОС должна стабилизироваться. Вызов dmesg расскажет, какой механизм помог автоматической стабилизации. Как настроен этот механизм по-умолчанию, и как изменить число процессов, которое можно создать в сессии?
+## 8. Создайте 2 независимых PV на получившихся md-устройствах.
 
-*    Конструкция определяет функцию с названием `:`, которая вызывает саму себя, пока не исчерпает лимит на запуск процессов в системе.
-*    Заменим `:` на слово:
+*   Создадим с командой `pvcreate`:
 ```shell
-func() {
-      func | func &
-};
-func
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+root@vagrant:/# pvcreate /dev/md0 /dev/md1
+  Physical volume "/dev/md0" successfully created.
+  Physical volume "/dev/md1" successfully created.
 ```
-*    Система бесконечно утверждает, что это fork-процесс:
+*   Посмотрим, что получилось вкратце с `pvscan`:
 ```shell
--bash: fork: Resource temporarily unavailable
+root@vagrant:/# pvscan
+  PV /dev/sda5   VG vgvagrant       lvm2 [<63.50 GiB / 0    free]
+  PV /dev/md0                       lvm2 [510.00 MiB]
+  PV /dev/md1                       lvm2 [<2.00 GiB]
+  Total: 3 [65.99 GiB] / in use: 1 [<63.50 GiB] / in no VG: 2 [<2.50 GiB]
 ```
-*   Но в конце концов "отходит" от этого состояния. С командой `dmesg` выводим сообщения. 
-*   Судя по временному отрезку и результату вывода на экран, `cgroup` помог системе стабилизироваться:
+*   И подробнее с `pvdisplay`:
 ```shell
-[   12.157402] systemd-journald[357]: File /var/log/journal/324489e30d404746a187573936b5c7e9/user-1000.journal corrupted or uncleanly shut down, renaming and replacing.
-[44054.775006] cgroup: fork rejected by pids controller in /user.slice/user-1000.slice/session-21.scope
+root@vagrant:/# pvdisplay
+  --- Physical volume ---
+  PV Name               /dev/sda5
+  VG Name               vgvagrant
+  PV Size               <63.50 GiB / not usable 0   
+  Allocatable           yes (but full)
+  PE Size               4.00 MiB
+  Total PE              16255
+  Free PE               0
+  Allocated PE          16255
+  PV UUID               OCbATH-NO0a-4yCv-lVyW-UOYQ-uFJm-DPdN8c
+   
+  "/dev/md0" is a new physical volume of "510.00 MiB"
+  --- NEW Physical volume ---
+  PV Name               /dev/md0
+  VG Name               
+  PV Size               510.00 MiB
+  Allocatable           NO
+  PE Size               0   
+  Total PE              0
+  Free PE               0
+  Allocated PE          0
+  PV UUID               vDcCXR-HLjJ-bdWC-t90n-SWut-5NCv-XMrmsk
+   
+  "/dev/md1" is a new physical volume of "<2.00 GiB"
+  --- NEW Physical volume ---
+  PV Name               /dev/md1
+  VG Name               
+  PV Size               <2.00 GiB
+  Allocatable           NO
+  PE Size               0   
+  Total PE              0
+  Free PE               0
+  Allocated PE          0
+  PV UUID               1s3iI0-AD2x-n6t9-MzlF-voI5-aNmr-lkcSQI
+
 ```
-*   `cgroup` - группа процессов в Linux, для которой механизмами ядра наложена изоляция и установлены ограничения 
-    на некоторые вычислительные ресурсы (процессорные, сетевые, ресурсы памяти, ресурсы ввода-вывода). 
-    Механизм позволяет образовывать иерархические группы процессов с заданными ресурсными свойствами и 
-    обеспечивает программное управление ими.    
-*   Таким образом, `cgroup` ограничивает создание процессов пользователя, т.к. "выдача" pid'ов процессам лимитирована
-*   Ограничить количество процессов, создаваемых пользователем, определенным количеством, с помощью `ulimit -u`:
+## 9. Создайте общую volume-group на этих двух PV.
+
+*   С помощью `vgcreate` создадим общую группу томов `vol_gr1`:
 ```shell
-$ ulimit -u 100
+root@vagrant:/# vgcreate vol_gr1 /dev/md0 /dev/md1
+  Volume group "vol_gr1" successfully created
+```
+*   Результат c `vgdisplay`:
+```shell
+root@vagrant:/# vgdisplay
+  --- Volume group ---
+  VG Name               vgvagrant
+  System ID             
+  Format                lvm2
+  Metadata Areas        1
+  Metadata Sequence No  3
+  VG Access             read/write
+  VG Status             resizable
+  MAX LV                0
+  Cur LV                2
+  Open LV               2
+  Max PV                0
+  Cur PV                1
+  Act PV                1
+  VG Size               <63.50 GiB
+  PE Size               4.00 MiB
+  Total PE              16255
+  Alloc PE / Size       16255 / <63.50 GiB
+  Free  PE / Size       0 / 0   
+  VG UUID               VE2d8u-Iecl-8hpG-Migd-wvgP-pWW8-GIXH5V
+   
+  --- Volume group ---
+  VG Name               vol_gr1
+  System ID             
+  Format                lvm2
+  Metadata Areas        2
+  Metadata Sequence No  1
+  VG Access             read/write
+  VG Status             resizable
+  MAX LV                0
+  Cur LV                0
+  Open LV               0
+  Max PV                0
+  Cur PV                2
+  Act PV                2
+  VG Size               2.49 GiB
+  PE Size               4.00 MiB
+  Total PE              638
+  Alloc PE / Size       0 / 0   
+  Free  PE / Size       638 / 2.49 GiB
+  VG UUID               izRKZ3-0FmL-mPrT-Zd7V-asdd-2ltX-ne6R2a
+```
+
+## 10. Создайте LV размером 100 Мб, указав его расположение на PV с RAID0.
+
+*   Создадим с `lvcreate`:
+```shell
+root@vagrant:/# lvcreate -L 100M vol_gr1 /dev/md0
+  Logical volume "lvol0" created.
+```
+*   Посмотрим результат с `lvdisplay`:
+```shell
+root@vagrant:/# lvdisplay
+  --- Logical volume ---
+  LV Path                /dev/vgvagrant/root
+  LV Name                root
+  VG Name                vgvagrant
+  LV UUID                MQQRbn-9xpd-nWNN-Fuq3-UH8Z-1AIp-AVmolp
+  LV Write Access        read/write
+  LV Creation host, time vagrant, 2020-12-23 07:45:37 +0000
+  LV Status              available
+  # open                 1
+  LV Size                <62.54 GiB
+  Current LE             16010
+  Segments               1
+  Allocation             inherit
+  Read ahead sectors     auto
+  - currently set to     256
+  Block device           253:0
+   
+  --- Logical volume ---
+  LV Path                /dev/vgvagrant/swap_1
+  LV Name                swap_1
+  VG Name                vgvagrant
+  LV UUID                bv9Pja-jeKa-32O7-Oodb-HnFk-z9D6-uX0W4s
+  LV Write Access        read/write
+  LV Creation host, time vagrant, 2020-12-23 07:45:37 +0000
+  LV Status              available
+  # open                 2
+  LV Size                980.00 MiB
+  Current LE             245
+  Segments               1
+  Allocation             inherit
+  Read ahead sectors     auto
+  - currently set to     256
+  Block device           253:1
+   
+  --- Logical volume ---
+  LV Path                /dev/vol_gr1/lvol0
+  LV Name                lvol0
+  VG Name                vol_gr1
+  LV UUID                Obrxq7-YvKk-60Dv-KkrX-inhs-qSEl-TCPShb
+  LV Write Access        read/write
+  LV Creation host, time vagrant, 2021-06-15 19:31:18 +0000
+  LV Status              available
+  # open                 0
+  LV Size                100.00 MiB
+  Current LE             25
+  Segments               1
+  Allocation             inherit
+  Read ahead sectors     auto
+  - currently set to     256
+  Block device           253:2
+```
+## 11. Создайте `mkfs.ext4` ФС на получившемся LV.
+```shell
+root@vagrant:/# mkfs.ext4 /dev/vol_gr1/lvol0 
+mke2fs 1.45.5 (07-Jan-2020)
+Creating filesystem with 25600 4k blocks and 25600 inodes
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (1024 blocks): done
+Writing superblocks and filesystem accounting information: done
+```
+
+## 12. Смонтируйте этот раздел в любую директорию, например, `/tmp/new`
+
+*   Смонтируем раздел:
+```shell
+root@vagrant:/# mkdir /tmp/new
+root@vagrant:/# mount /dev/vol_gr1/lvol0 /tmp/new
+root@vagrant:/# ls /tmp/new/
+lost+found
+```
+## 13. Поместите туда тестовый файл, например wget `https://mirror.yandex.ru/ubuntu/ls-lR.gz -O /tmp/new/test.gz`
+```shell
+root@vagrant:/# wget https://mirror.yandex.ru/ubuntu/ls-lR.gz -O /tmp/new/test.gz
+--2021-06-15 19:41:20--  https://mirror.yandex.ru/ubuntu/ls-lR.gz
+Resolving mirror.yandex.ru (mirror.yandex.ru)... 213.180.204.183, 2a02:6b8::183
+Connecting to mirror.yandex.ru (mirror.yandex.ru)|213.180.204.183|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 20897241 (20M) [application/octet-stream]
+Saving to: ‘/tmp/new/test.gz’
+
+/tmp/new/test.gz                                            100%[==========>]  19.93M  2.09MB/s    in 9.9s    
+
+2021-06-15 19:41:30 (2.01 MB/s) - ‘/tmp/new/test.gz’ saved [20897241/20897241]
+```
+
+## 14. Прикрепите вывод `lsblk`
+```shell
+root@vagrant:/# lsblk
+NAME                 MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINT
+sda                    8:0    0   64G  0 disk  
+├─sda1                 8:1    0  512M  0 part  /boot/efi
+├─sda2                 8:2    0    1K  0 part  
+└─sda5                 8:5    0 63.5G  0 part  
+  ├─vgvagrant-root   253:0    0 62.6G  0 lvm   /
+  └─vgvagrant-swap_1 253:1    0  980M  0 lvm   [SWAP]
+sdb                    8:16   0  2.5G  0 disk  
+├─sdb1                 8:17   0    2G  0 part  
+│ └─md1                9:1    0    2G  0 raid1 
+└─sdb2                 8:18   0  511M  0 part  
+  └─md0                9:0    0  510M  0 raid1 
+    └─vol_gr1-lvol0  253:2    0  100M  0 lvm   /tmp/new
+sdc                    8:32   0  2.5G  0 disk  
+├─sdc1                 8:33   0    2G  0 part  
+│ └─md1                9:1    0    2G  0 raid1 
+└─sdc2                 8:34   0  511M  0 part  
+  └─md0                9:0    0  510M  0 raid1 
+    └─vol_gr1-lvol0  253:2    0  100M  0 lvm   /tmp/new
+```
+## 15. Протестируйте целостность файла
+```shell
+# выполнено
+root@vagrant:/# gzip -t /tmp/new/test.gz && echo $?
+0
+```
+
+## 16. Используя `pvmove`, переместите содержимое PV с RAID0 на RAID1.
+```shell
+# у нас два PV-устройства, второе указывать необязательно в таком случае:
+root@vagrant:/# pvmove /dev/md0
+  /dev/md0: Moved: 84.00%
+  /dev/md0: Moved: 100.00%
+root@vagrant:/# lsblk
+NAME                 MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINT
+sda                    8:0    0   64G  0 disk  
+├─sda1                 8:1    0  512M  0 part  /boot/efi
+├─sda2                 8:2    0    1K  0 part  
+└─sda5                 8:5    0 63.5G  0 part  
+  ├─vgvagrant-root   253:0    0 62.6G  0 lvm   /
+  └─vgvagrant-swap_1 253:1    0  980M  0 lvm   [SWAP]
+sdb                    8:16   0  2.5G  0 disk  
+├─sdb1                 8:17   0    2G  0 part  
+│ └─md1                9:1    0    2G  0 raid1 
+│   └─vol_gr1-lvol0  253:2    0  100M  0 lvm   /tmp/new
+└─sdb2                 8:18   0  511M  0 part  
+  └─md0                9:0    0  510M  0 raid1 
+sdc                    8:32   0  2.5G  0 disk  
+├─sdc1                 8:33   0    2G  0 part  
+│ └─md1                9:1    0    2G  0 raid1 
+│   └─vol_gr1-lvol0  253:2    0  100M  0 lvm   /tmp/new
+└─sdc2                 8:34   0  511M  0 part  
+  └─md0                9:0    0  510M  0 raid1
+```
+## 17. Сделайте `--fail` на устройство в вашем RAID1 md.
+
+```shell
+root@vagrant:/# mdadm --fail /dev/md1 /dev/sdb1
+mdadm: set /dev/sdb1 faulty in /dev/md1
+```
+*   Видим, что статус `faulty`:
+```shell
+root@vagrant:/# mdadm -D /dev/md1
+/dev/md1:
+           Version : 1.2
+     Creation Time : Tue Jun 15 19:10:21 2021
+        Raid Level : raid1
+        Array Size : 2094080 (2045.00 MiB 2144.34 MB)
+     Used Dev Size : 2094080 (2045.00 MiB 2144.34 MB)
+      Raid Devices : 2
+     Total Devices : 2
+       Persistence : Superblock is persistent
+
+       Update Time : Tue Jun 15 19:53:02 2021
+             State : clean, degraded 
+    Active Devices : 1
+   Working Devices : 1
+    Failed Devices : 1
+     Spare Devices : 0
+
+Consistency Policy : resync
+
+              Name : vagrant:1  (local to host vagrant)
+              UUID : c53ccdc9:6b3d78b1:b4683d2f:4b757429
+            Events : 22
+
+    Number   Major   Minor   RaidDevice State
+       -       0        0        0      removed
+       1       8       33        1      active sync   /dev/sdc1
+
+       0       8       17        -      faulty   /dev/sdb1
+
+```
+## 18. Подтвердите выводом `dmesg`, что RAID1 работает в деградированном состоянии.
+
+*   Disk failure on sdb1, disabling device:
+```shell
+root@vagrant:/# dmesg | grep md1
+[ 3585.246413] md/raid1:md1: not clean -- starting background reconstruction
+[ 3585.246415] md/raid1:md1: active with 2 out of 2 mirrors
+[ 3585.246438] md1: detected capacity change from 0 to 2144337920
+[ 3585.248606] md: resync of RAID array md1
+[ 3595.755458] md: md1: resync done.
+[ 5925.200642] md: delaying data-check of md1 until md0 has finished (they share one or more physical units)
+[ 5927.836022] md: data-check of RAID array md1
+[ 5938.295196] md: md1: data-check done.
+[ 6145.529912] md/raid1:md1: Disk failure on sdb1, disabling device.
+               md/raid1:md1: Operation continuing on 1 devices.
+```
+
+## 19. Протестируйте целостность файла, несмотря на "сбойный" диск он должен продолжать быть доступен:
+```shell
+root@vagrant:/# gzip -t /tmp/new/test.gz && echo $?
+0
+# по-прежнему доступен
+```
+
+## 20. Погасите тестовый хост, `vagrant destroy`.
+
+```shell
+$ vagrant destroy
+    default: Are you sure you want to destroy the 'default' VM? [y/N] y
+==> default: Forcing shutdown of VM...
+==> default: Destroying VM and associated drives...
 ```
