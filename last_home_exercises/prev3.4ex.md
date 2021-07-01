@@ -28,6 +28,8 @@ scrape_configs:
 ```
         
     
+
+
 *   Создаем targets.json:    
 ```json
 [
