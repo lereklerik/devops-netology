@@ -1,627 +1,493 @@
-# Домашнее задание к занятию "3.8. Компьютерные сети, лекция 3"
-## 1. `ipvs`. Если при запросе на VIP сделать подряд несколько запросов (например, `for i in {1..50}; do curl -I -s 172.28.128.200>/dev/null; done `), ответы будут получены почти мгновенно. Тем не менее, в выводе `ipvsadm -Ln` еще некоторое время будут висеть активные `InActConn`. Почему так происходит?
+# Домашнее задание к занятию "3.9. Элементы безопасности информационных систем"
 
-***DR***
-*	В выводе `ipsvadm` перечислены соединения двух типов состояний:
-	 -	**ActiveConn** - в состоянии `ESTABLISHED`;
-	 -	**InActConn** - любое другое состояние.
-*	DR видит все пакеты между клиентом и реальным сервером, поэтому всегда знает состояние TCP-соединений 
-	 и список из `ipvsadm`. 
-	 > Завершение TCP-соединения происходит, когда один из хостов отправляет `FIN` с последующим ответом `ACK` с другого хоста;
-	 
-	 > Затем другой хост отправляет свой `FIN`, за которым следует `ACK` от первой машины. 
-	 
-	 > Если реальный сервер инициирует завершение соединения, директор сможет сделать вывод, что это произошло, 
-	 *только по `ACK` от клиента*.
-	 
-	 > В любом случае директор должен сделать вывод о том, что соединение было закрыто. Поэтому он, получив `ACK` от клиента,
-	 сравнивает свою собственную хэш-таблицу соединений, чтобы объявить, что одно из них было разорвано. 
-	 	 
-	 > ***Таким образом, количество в столбце `InActConn` для LVS-DR, LVS-Tun является предполагаемым, а не реальным показателем.***
+## 1. Установите Hashicorp Vault в виртуальной машине Vagrant/VirtualBox. 
 
-*	Записи в столбце `ActiveConn` поступают от:
-	 *	Сервисов с установленным подключением. Примерами служб являются `telnet` и `ftp` (порт 21).
-*	Записи в столбце `InActConn` поступают от:
-	 *	**Нормальных операций:**
-			-	Такие службы, как http (в непостоянном режиме, например, HTTP /1.0) или ftp-data (порт 20), закрывают соединения, как только получено обращение / данные (html-страница, gif и т. Д.) (<1 сек).		  
-			-	Запись в столбце InActConn можно наблюдать до тех пор, пока не истечет время ожидания соединения.
-			-	При 1000 подключений в секунду и 60 секунд для таймаута подключений (обычный тайм-аут), может быть 60 000 InActConns.
-	 *	**Патологического состояния (например, LVS неправильно настроен):**
-			-	*Идентификационные отложенные соединения*: трехстороннее рукопожатие для установления соединения требует всего 3 обмена пакетами (т. е. быстро в любой нормальной сети), и не получится достаточно быстро с `ipvsadm` увидеть соединение в состояниях до того, как оно станет **ESTABLISHED**.
-				 >Однако, если служба на реальном сервере находится под `authd` / `identifyd` , можно увидеть запись `InActConn` в течение периода задержки.
-			-	*Неправильная маршрутизация (обычно неправильный gw по умолчанию для реальных серверов)*:
-				В этом случае трехстороннее рукопожатие никогда не завершится, соединение зависнет, и в столбце `InActConn` появится запись.
-
-Обычно количество `InActConn` больше или намного больше, чем количество `ActiveConn`.
-
-------------------------------------------------------------------------------------
-<details>
-<summary>Про NAT</summary>
+*   Настройка `vault`:
 ```shell
-# пока настраивала машины для второго задания, выполнила запрос к другому адресу
-root@netology5:/home/vagrant# for i in {1..50}; do curl -I -s 192.168.1.100>/dev/null; done
-root@netology5:/home/vagrant# ipvsadm -Ln
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port Scheduler Flags
-  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+vagrant@vagrant:~$ export VAULT_ADDR='http://0.0.0.0:8200'
+vagrant@vagrant:~$ echo "+VyM1V32HXEwZI/LqQu6m6TNmZCrnQq604rYuv/9/FA=" > unseal.key
+vagrant@vagrant:~$ export VAULT_DEV_ROOT_TOKEN_ID=s.zhUkRAh7VdwEDl2n9hl5EGFR
+vagrant@vagrant:~$ vault status
+Key             Value
+---             -----
+Seal Type       shamir
+Initialized     true
+Sealed          false
+Total Shares    1
+Threshold       1
+Version         1.7.3
+Storage Type    inmem
+Cluster Name    vault-cluster-542d0cb6
+Cluster ID      d4d692b4-7e8c-c604-cfb3-2f931a4bf099
+HA Enabled      false
 ```
-*   В `IPVS` есть концепция виртуального сервиса с собственным адресом – **VIP (Virtual IP).**    
-*   В NAT режиме адрес VIP заменяется DST одного из “real” серверов, где отвечает приложение.    
-*   Так как для возврата ответа клиенту требуется обратная трансляция, в NAT режиме ответ роутится через балансировщик.
-	>NAT опирается на информацию от `сonntrack`, поэтому он может одинаково обрабатывать все пакеты из одного потока.
-	
-	>Firewall’ы с отслеживанием состояния, опираются на информацию от `сonntrack`, чтобы добавлять “ответный” трафик в белый список. 
-	Это позволяет вам написать сетевую политику, которая говорит: *«разрешить моему pod’у подключаться к любому удаленному IP-адресу»* без необходимости писать политику для явного разрешения ответного трафика.
+## 2. Запустить Vault-сервер в dev-режиме (дополнив ключ -dev упомянутым выше -dev-listen-address, если хотите увидеть UI).
 
-Однако у `conntrack` есть свои ограничения.
-*   Таблица`conntrack`имеет настраиваемый максимальный размер, и, если она заполняется, 
-    соединения обычно начинают отклоняться или прерываться. 
-	Есть несколько сценариев, при которых стоит задуматься об использовании таблицы `conntrack`:
-  
-**Наиболее очевидный случай**, если ваш сервер обрабатывает чрезвычайно большое количество единовременно активных соединений. Например, если ваша таблица`conntrack`настроена на 128k записей, но у вас есть > 128k одновременных подключений;
+*   Работа из браузера:
+    *   [screenshot1](pictures/vault_starting.png)
+    *   [screenshot2](pictures/vault_starting2.png)
+ 
+---------------------------------------------------------
+### *Однако с 0.0.0.0:8200 у меня не подписывался промежуточный сертификат. Поэтому от UI было принято решение отказаться*
+
+---------------------------------------------------------
+```shell
+# Новый запуск без участия UI
+vagrant@vagrant:~$ vault server -dev
+==> Vault server configuration:
+
+             Api Address: http://127.0.0.1:8200
+                     Cgo: disabled
+         Cluster Address: https://127.0.0.1:8201
+              Go Version: go1.15.13
+              Listener 1: tcp (addr: "127.0.0.1:8200", cluster address: "127.0.0.1:8201", max_request_duration: "1m30s", max_request_size: "33554432", tls: "disabled")
+               Log Level: info
+                   Mlock: supported: true, enabled: false
+           Recovery Mode: false
+                 Storage: inmem
+                 Version: Vault v1.7.3
+             Version Sha: 5d517c864c8f10385bf65627891bc7ef55f5e827
+
+-----
+WARNING! dev mode is enabled! In this mode, Vault runs entirely in-memory
+and starts unsealed with a single unseal key. The root token is already
+authenticated to the CLI, so you can immediately begin using Vault.
+
+You may need to set the following environment variable:
+
+    $ export VAULT_ADDR='http://127.0.0.1:8200'
+
+The unseal key and root token are displayed below in case you want to
+seal/unseal the Vault or re-authenticate.
+
+Unseal Key: +H7rCaU8QBQZZ6SwoNLcGPAXTnwOxQs/OBBwAHG66Yo=
+Root Token: s.ST2sz0jAvxdyzqVQ1Efa6mvs
+
+Development mode should NOT be used in production installations!
+```
+
+```shell
+# Настраиваем переменные, проверяем статус сервера
+vagrant@vagrant:~$ export VAULT_ADDR='http://127.0.0.1:8200'
+vagrant@vagrant:~$ echo "+H7rCaU8QBQZZ6SwoNLcGPAXTnwOxQs/OBBwAHG66Yo=" > unseal.key
+vagrant@vagrant:~$ export VAULT_DEV_ROOT_TOKEN_ID=s.ST2sz0jAvxdyzqVQ1Efa6mvs
+vagrant@vagrant:~$ vault status
+Key             Value
+---             -----
+Seal Type       shamir
+Initialized     true
+Sealed          false
+Total Shares    1
+Threshold       1
+Version         1.7.3
+Storage Type    inmem
+Cluster Name    vault-cluster-8ae1cb4f
+Cluster ID      dea006eb-2fba-5617-c618-bda73464b752
+HA Enabled      false
+
+```
+
+## 3. Используя PKI Secrets Engine, создайте Root CA и Intermediate CA. Обратите внимание на дополнительные материалы по созданию CA в Vault, если с изначальной инструкцией возникнут сложности.
+*   Создадим корневой сертификат
+```shell
+vagrant@vagrant:~$ vault secrets enable pki
+Success! Enabled the pki secrets engine at: pki/
+vagrant@vagrant:~$ vault secrets tune -max-lease-ttl=87600h pki
+Success! Tuned the secrets engine at: pki/
+vagrant@vagrant:~$ vault write -field=certificate pki/root/generate/internal \
+>         common_name="example.com" \
+>         ttl=87600h > CA_cert.crt
+vagrant@vagrant:~$ vault write pki/config/urls \
+>         issuing_certificates="$VAULT_ADDR/v1/pki/ca" \
+>         crl_distribution_points="$VAULT_ADDR/v1/pki/crl"
+Success! Data written to: pki/config/urls
+
+vagrant@vagrant:~$ vault write pki/roles/example-dot-com \
+>     allowed_domains=my-website.com \
+>     allow_subdomains=true \
+>     max_ttl=72h
+Success! Data written to: pki/roles/example-dot-com
+vagrant@vagrant:~$ vault write pki/issue/example-dot-com \
+>     common_name=www.my-website.com
+Key                 Value
+---                 -----
+certificate         -----BEGIN CERTIFICATE-----
+MIIDxDCCAqygAwIBAgIUQzsJxqMV9JRBLyfgspBQhhKjhQ4wDQYJKoZIhvcNAQEL
+CS1HN+ib+ZE=
+-----END CERTIFICATE-----
+expiration          1626521626
+issuing_ca          -----BEGIN CERTIFICATE-----
+MIIDNTCCAh2gAwIBAgIUZPQaRakae7ESMTHCzAFZvK4W+B8wDQYJKoZIhvcNAQE
+5WAfQOWn1zcg
+-----END CERTIFICATE-----
+private_key         -----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEA8//ETW/lflaY6RcMFy8MxUFrjoZMek5VJ/9/4aQaZZq6yDWm
+kANIWTKndC0a/QO/Ow7BHf27vONaPA/AOubmILdXsXCtOPbzH97tQQM=
+-----END RSA PRIVATE KEY-----
+private_key_type    rsa
+serial_number       43:3b:09:c6:a3:15:f4:94:41:2f:27:e0:b2:90:50:86:12:a3:85:0e
+```
+
+*   Создадим промежуточный сертификат
+```shell
+vagrant@vagrant:~$ vault secrets enable -path=pki_interm pki
+Success! Enabled the pki secrets engine at: pki_interm/
+vagrant@vagrant:~$ vault secrets tune -max-lease-ttl=43800h pki_interm
+Success! Tuned the secrets engine at: pki_interm/
+## запрос на сертификат
+vagrant@vagrant:~$ vault write -format=json pki_interm/intermediate/generate/internal common_name="example.com Intermediate Authority" | jq -r '.data.csr' > pki_intermediate.csr
+
+vagrant@vagrant:~$ vault write pki/root/sign-intermediate csr=@pki_intermediate.csr format=pem_bundle ttl=43800h
+Key              Value
+---              -----
+certificate      -----BEGIN CERTIFICATE-----
+MIIDpjCCAo6gAwIBAgIUL693u60vzfgK9iD441VEKSJTmdQwDQYJKoZIhvcNAQEL
+-----END CERTIFICATE-----
+expiration       1783945385
+issuing_ca       -----BEGIN CERTIFICATE-----
+MIIDNTCCAh2gAwIBAgIUZPQaRakae7ESMTHCzAFZvK4W+B8wDQYJKoZIhvcNAQEL
+MEOg8qaNscmY8KaCLkcvOdy4bRhtUtz65T7/FExR8XysvXmi/w0yVTt+v/i8228C
+5WAfQOWn1zcg
+-----END CERTIFICATE-----
+serial_number    2f:af:77:bb:ad:2f:cd:f8:0a:f6:20:f8:e3:55:44:29:22:53:99:d4
+
+## Пропишем промежуточный сертификат
+vagrant@vagrant:~$ vault write -format=json pki/root/sign-intermediate csr=@pki_intermediate.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > intermediate.cert.pem
+vagrant@vagrant:~$ vault write pki_interm/intermediate/set-signed certificate=@intermediate.cert.pem
+Success! Data written to: pki_interm/intermediate/set-signed
+
+## Создадим роль для выдачи сертификатов
+vagrant@vagrant:~$ vault write pki_interm/roles/example-dot-com allowed_domains="example.com" allow_subdomains=true max_ttl="720h"
+Success! Data written to: pki_interm/roles/example-dot-com
+## Запросим сертификаты
+vagrant@vagrant:~$ vault write pki_interm/issue/example-dot-com common_name="test.example.com" ttl="24h"
+Key                 Value
+---                 -----
+ca_chain            [-----BEGIN CERTIFICATE-----
+MIIDpjCCAo6gAwIBAgIUV1jR2xDL18+zAGQfiIospz0bEXEwDQYJKoZIhvcNAQEL
+JPAeLn+Ho3hITJQFYEDF7xDt4gxAtQZZkN5NUfR+YW+bBnbCyiMv72PfNpSNR/yD
+wuF2/WN9kICwqdcYIQTmML87asP26/Nmwdo=
+-----END CERTIFICATE-----]
+certificate         -----BEGIN CERTIFICATE-----
+MIIDZjCCAk6gAwIBAgIUSCkge42YRf1DsXFPMfJ2n4y8H9owDQYJKoZIhvcNAQEL
+GMMc/qHscGYZEiW7l1ZrpMwLiSFlMbenf26i+USzk7iDhOqGadQtMfozNM5qrKBd
+sr0FD+syqSjxvQ==
+-----END CERTIFICATE-----
+expiration          1626352128
+issuing_ca          -----BEGIN CERTIFICATE-----
+MIIDpjCCAo6gAwIBAgIUV1jR2xDL18+zAGQfiIospz0bEXEwDQYJKoZIhvcNAQEL
+JPAeLn+Ho3hITJQFYEDF7xDt4gxAtQZZkN5NUfR+YW+bBnbCyiMv72PfNpSNR/yD
+wuF2/WN9kICwqdcYIQTmML87asP26/Nmwdo=
+-----END CERTIFICATE-----
+private_key         -----BEGIN RSA PRIVATE KEY-----
+MIIEpgIBAAKCAQEAtCrN06NTeOQVxap1We0QPsAtGjRm25CGYuSRZlbgH6v62px/
+Xt+jVENzhaOULR4ziznA2DbKbRIRRUkANz+pq37rN20hEaBAxU3SOXSN2hiGHK5e
+BYKDKTZ7H7B8flu5VHTCyc+lioEQYf6w2KYnVTdqYKeL7c/DvGCaBwu3
+-----END RSA PRIVATE KEY-----
+private_key_type    rsa
+serial_number       48:29:20:7b:8d:98:45:fd:43:b1:71:4f:31:f2:76:9f:8c:bc:1f:da
+```
+
+
+## 4. Согласно этой же инструкции, подпишите Intermediate CA csr на сертификат для тестового домена (например, netology.example.com если действовали согласно инструкции).
+
+*   Создадим центры сертификации:
+```shell
+vagrant@vagrant:~$ vault secrets enable -path=pki_netology pki
+Success! Enabled the pki secrets engine at: pki_netology/
+vagrant@vagrant:~$ vault secrets tune -max-lease-ttl=8760h pki_netology
+Success! Tuned the secrets engine at: pki_netology/
+vagrant@vagrant:~$ vault secrets enable -path=pki_intermediate pki
+Success! Enabled the pki secrets engine at: pki_intermediate/
+vagrant@vagrant:~$ vault secrets tune -max-lease-ttl=43800h pki_intermediate
+Success! Tuned the secrets engine at: pki_intermediate/
+```
+*   Сгенерируем СА:
+```shell
+vagrant@vagrant:~$ vault write pki_netology/root/generate/internal common_name="Root Authority localhost" ttl="8760h" > CA_cert.crt
+```
+*   Создадим роль для корневого центра:
+```shell
+vagrant@vagrant:~$ vault write pki_netology/roles/devops-dot-un allowed_domains="example.com" allow_subdomains=true max_ttl="72h"
+Success! Data written to: pki_netology/roles/devops-dot-un
+```
+*   Запросим сертификат:
+```shell
+vagrant@vagrant:~$ vault write pki_netology/issue/devops-dot-un common_name="netology.example.com"
+Key                 Value
+---                 -----
+certificate         -----BEGIN CERTIFICATE-----
+MIIDZDCCAkygAwIBAgIUMvT15rhAKZ1cK6lTEwzQyQAQTFQwDQYJKoZIhvcNAQEL
+-----END CERTIFICATE-----
+expiration          1626590091
+issuing_ca          -----BEGIN CERTIFICATE-----
+MIIDNzCCAh+gAwIBAgIUYUPn/3P2DUarDFxo5RFm2TyWO7gwDQYJKoZIhvcNAQEL
+CWAkgd0/xxr6xmQ=
+-----END CERTIFICATE-----
+private_key         -----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAlgNzVWvdVaSkGLORESHVZ0TA8aLJ6sx23lKVCo4zIojyRouP
+0ssTwiSOqV+Fi9WMQ3Z+37oudbMIaq+nKDVqfMu+uUp2YU0dBy1tWg==
+-----END RSA PRIVATE KEY-----
+private_key_type    rsa
+serial_number       32:f4:f5:e6:b8:40:29:9d:5c:2b:a9:53:13:0c:d0:c9:00:10:4c:54
+```
+*   Создадим роль для промежуточного центра
+```shell
+vagrant@vagrant:~$ vault write pki_intermediate/roles/devops-dot-un allowed_domains="example.com" allow_subdomains=true max_ttl="720h"
+Success! Data written to: pki_intermediate/roles/devops-dot-un
+```
+*   CRL:
+```shell
+vagrant@vagrant:~$ vault write pki_netology/config/urls issuing_certificates="http://localhost:8200/v1/pki/ca" crl_distribution_points="http://localhost:8200/v1/pki/crl"
+Success! Data written to: pki_netology/config/urls
+```
+*   Сгенерируем запрос на промежуточный сертификат:
+```shell
+vagrant@vagrant:~$ vault write -format=json pki_intermediate/intermediate/generate/internal common_name="Intermediate Authority localhost" county="RU" organization="localOffice" | jq -r '.data.csr' > pki_intermediate.csr
+```
+
+*   Подпишем промежуточный сертификат корневым:
+```shell
+vagrant@vagrant:~$ vault write -format=json pki_netology/root/sign-intermediate csr=@pki_intermediate.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > intermediate.cert.pem
+```
+*   Добавим в `vault`:
+```shell
+vagrant@vagrant:~$ vault write pki_intermediate/intermediate/set-signed certificate=@intermediate.cert.pem
+Success! Data written to: pki_intermediate/intermediate/set-signed
+``` 
+*   Сформируем цепочку + закрытый ключ:
+```shell
+vagrant@vagrant:~$ vault write pki_intermediate/issue/devops-dot-un common_name="netology.example.com" county="RU" organization="localOffice" ttl="24h"
+Key                 Value
+---                 -----
+ca_chain            [-----BEGIN CERTIFICATE-----
+MIIDsTCCApmgAwIBAgIUK2+hhiq3TWxmAFA6vJO0wTQe8R8wDQYJKoZIhvcNAQEL
+woIpSO6HxwcOukRTinYFQariDpM3wcLGMZxYuplD6VDIc1Dy8Q==
+-----END CERTIFICATE-----]
+certificate         -----BEGIN CERTIFICATE-----
+MIIDbDCCAlSgAwIBAgIUfrfCc7qKLGSH5ddTiMt5XDoz05owDQYJKoZIhvcNAQEL
++4xYdqTHHKmVjhc/umc60g==
+-----END CERTIFICATE-----
+expiration          1626417433
+issuing_ca          -----BEGIN CERTIFICATE-----
+MIIDsTCCApmgAwIBAgIUK2+hhiq3TWxmAFA6vJO0wTQe8R8wDQYJKoZIhvcNAQEL
+woIpSO6HxwcOukRTinYFQariDpM3wcLGMZxYuplD6VDIc1Dy8Q==
+-----END CERTIFICATE-----
+private_key         -----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAmO2jOMYsm0CGbEquoT/pY+cQQRXHfU2qamXtFJUJUYXpIY3G
+TOuI4w1l2KHR7JnVZ288v3sDXzd+cRbiWycCmlLJuw1ehnB3ZnV8
+-----END RSA PRIVATE KEY-----
+private_key_type    rsa
+serial_number       7e:b7:c2:73:ba:8a:2c:64:87:e5:d7:53:88:cb:79:5c:3a:33:d3:9a
+```
+
+## 5. Поднимите на localhost nginx, сконфигурируйте default vhost для использования подписанного Vault Intermediate CA сертификата и выбранного вами домена. Сертификат из Vault подложить в nginx руками.
+
+*   Создала каталог и два файла, скопировав результат подписи сертификата:
+    *   Первый `chain.pem` - цепочка сертификатов, включающая сертификат доверенного центра и выданный личный сертификат
     
-**Немного менее очевидный случай**: если ваш сервер обрабатывает очень большое количество соединений в секунду. 
-> Даже если соединения кратковременные, *они продолжают отслеживаться Linux в течение некоторого периода времени (по умолчанию 120с)*.
-
-Например, если ваша таблица`conntrack`настроена на 128 тыс. записей и вы пытаетесь обработать 1100 подключений в секунду, они будут превышать размер таблицы `conntrack`, даже если соединения очень недолговечны (128k / 120с = 1092 соединений / с).
-
-
-*Таким образом, из-за отслеживания Linux'ом соединений, их статус активен в течение некоторого времени*
-</details>
-
-------------------------------------------------------------------------------------
-
-
-# 2. На лекции мы познакомились отдельно с `ipvs` и отдельно с `keepalived`. Воспользовавшись этими знаниями, совместите технологии вместе (VIP должен подниматься демоном keepalived). Приложите конфигурационные файлы, которые у вас получились, и продемонстрируйте работу получившейся конструкции. Используйте для директора отдельный хост, не совмещая его с риалом! Подобная схема возможна, но выходит за рамки рассмотренного на лекции.
-
-----------------------------------------------------------------------------------------------------------
-*	*Изменила конфигурационный файл, т.к. приложенный не присваивал виртуальным машинам нужные ip-адреса.*
-	
-[Vagrantfile](https://bikepower.ddns.net/index.php/s/8w4EZTJtj6oYzaD)
-<details>
-<summary>Или под катом...</summary>
-Vagrant.configure("2") do |config|
-  config.vm.network "private_network", virtualbox__intnet: true, auto_config: false
-  config.vm.box = "bento/ubuntu-20.04"
-
-  config.vm.define "netology1" do |vb|
-	vb.vm.provider "virtualbox" do |v|
-	  v.memory = 512
-	  v.cpus = 1
-	end
-	  vb.vm.provision "shell" do |s|
-		s.inline = "hostname netology1;"\
-		  "ip addr add 192.168.1.10/24 dev eth1;"\
-		  "ip link set dev eth1 up;"\
-		  "sudo apt-get update;"\
-		  "sudo apt -y install nginx;"
-	  end
-  end
- 
- config.vm.define "netology2" do |vb|
-	vb.vm.provider "virtualbox" do |v|
-	  v.memory = 512
-	  v.cpus = 1
-	end
-	  vb.vm.provision "shell" do |s|
-		s.inline = "hostname netology2;"\
-		  "ip addr add 192.168.1.13/24 dev eth1;"\
-		  "ip link set dev eth1 up;"\
-		  "sudo apt-get update;"\
-		  "sudo apt -y install nginx;"
-	  end
-  end
- 
-  config.vm.define "netology3" do |vb|
-	vb.vm.provider "virtualbox" do |v|
-	  v.memory = 512
-	  v.cpus = 1
-	end
-	  vb.vm.provision "shell" do |s|
-		s.inline = "hostname netology3;"\
-		  "ip addr add 192.168.1.30/24 dev eth1;"\
-		  "ip link set dev eth1 up;"\
-		  "sudo apt-get update;"\
-		  "sudo apt -y install nginx;"
-	  end
-  end
-
-  config.vm.define "netology4" do |vb|
-	vb.vm.provider "virtualbox" do |v|
-	  v.memory = 512
-	  v.cpus = 1
-	end
-	  vb.vm.provision "shell" do |s|
-		s.inline = "hostname netology4;"\
-		  "ip addr add 192.168.1.40/24 dev eth1;"\
-		  "ip link set dev eth1 up;"\
-		  "sudo apt-get update;"\
-		  "sudo apt -y install nginx;"
-	  end
-  end
- 
-  config.vm.define "netology5" do |vb|
-	vb.vm.provider "virtualbox" do |v|
-	  v.memory = 512
-	  v.cpus = 1
-	end
-	  vb.vm.provision "shell" do |s|
-		s.inline = "hostname netology5;"\
-		  "ip addr add 192.168.1.50/24 dev eth1;"\
-		  "ip link set dev eth1 up;"\
-		  "sudo apt-get update;"\
-		  "sudo apt -y install nginx;"          
-	  end
-  end 
-end
-</details>
-
-----------------------------------------------------------------------------------------------------------
-*	Виртуальные машины:
-
-1. [Клиент](https://bikepower.ddns.net/index.php/s/9qCr74aicTYBZgA) `netology5`, ip `192.168.1.50` 
-1. `Балансировщики`:
-   1. [Балансировщик1](https://bikepower.ddns.net/index.php/s/6zsfDsbE6m2tdxD) `netology1`, ip `192.168.1.10`
-   2. [Балансировщик2](https://bikepower.ddns.net/index.php/s/m34dTgiSTCbZoaa) `netology3`, ip `192.168.1.30`
-1. `nginx`:
-	1. [nginx1](https://bikepower.ddns.net/index.php/s/iNywTSgz5g69HcW) `netology2`, ip `192.168.1.13`
-	2. [nginx2](https://bikepower.ddns.net/index.php/s/57HpdyEw4AFgf2m) `netology4`, ip `192.168.1.40`
-
-*	Сконфигурированные файлы по машинам: [machines](https://bikepower.ddns.net/index.php/s/kLMy7doLjXd9WBi)
-
-----------------------------------------------------------------------------------------------------------
-
-* Запрос с клиента к `nginx`
 ```shell
-##--------------------------------------------------------------------------------------
-## netology5 client
-##--------------------------------------------------------------------------------------
-vagrant@netology5:~$ curl -I -s 192.168.1.{13,40}:80 | grep HTTP
+vagrant@vagrant:~$ cat chain.pem
+-----BEGIN CERTIFICATE-----
+MIIDbDCCAlSgAwIBAgIUfrfCc7qKLGSH5ddTiMt5XDoz05owDQYJKoZIhvcNAQEL
+BQAwKzEpMCcGA1UEAxMgSW50ZXJtZWRpYXRlIEF1dGhvcml0eSBsb2NhbGhvc3Qw
+HhcNMjEwNzE1MDYzNjQ0WhcNMjEwNzE2MDYzNzEzWjAfMR0wGwYDVQQDExRuZXRv
+bG9neS5leGFtcGxlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
+AJjtozjGLJtAhmxKrqE/6WPnEEEVx31Nqmpl7RSVCVGF6SGNxn0Lyl19X8LpciiI
+DRFoioluhdXlO5vtMko+CEYDnNNnfoJksPV/fnbZYQ4WUsuNtCItPp1E19swHtQn
+rrZcqfVzy+U3cdQFN9gdZgOdXxkBQdELw+acHQrqxXu0DmuY9CvRpj1unnSLU/PF
+Zlc3o9SC9hAxrxJ/7wGLNzPJIXl6k6lDv1Qc2w1755adSzJzPKQgMhAofszeAbJI
+R+QK6CcEM4ogPp4DLyOIBC5OVcrP9MRgSpfTmy/5mjNYFNJVpiENw4FhMi4c6pRc
+aSuFXf9I4cGbA1W5wPrANWkCAwEAAaOBkzCBkDAOBgNVHQ8BAf8EBAMCA6gwHQYD
+VR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMB0GA1UdDgQWBBRDbFMiS7D9QwbK
+FD275EItTjriKDAfBgNVHSMEGDAWgBQ8Xkyivd3TZhFKVmcRE3Mtvn1d3zAfBgNV
+HREEGDAWghRuZXRvbG9neS5leGFtcGxlLmNvbTANBgkqhkiG9w0BAQsFAAOCAQEA
+PdztySeknrcjpK3Q9GwTygUu2AJSyLJY57pT6nw5Ksz9yBjtaR2l34UtLujsC3Pv
+bbholtsLrSTXtbR6pEblrlhDK0UeQTFx3aQam6pgAKLPfoU/VDuNAuedwKufc+u7
+Qpqk1KdMPDjC4b0bLBwuSKYRNqhi6yuKEpn6pRKEvi8MvVATYITNMyMg0fhd61ox
+4BO7poSzqBN1tTB5m6FkwNietIPm2YPy2Fq1nxfVrwoPTGvd4c6R55m3S6HuncHT
+zRoi4/BaOSIxirQYuBkTsC6s0cGeV+b7nfr6GNd3eMQRXX0HIC1AR63RH+PJmRaJ
++4xYdqTHHKmVjhc/umc60g==
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIDsTCCApmgAwIBAgIUK2+hhiq3TWxmAFA6vJO0wTQe8R8wDQYJKoZIhvcNAQEL
+BQAwIzEhMB8GA1UEAxMYUm9vdCBBdXRob3JpdHkgbG9jYWxob3N0MB4XDTIxMDcx
+NTA2MzYxOVoXDTIyMDcxNTA2MzY0OVowKzEpMCcGA1UEAxMgSW50ZXJtZWRpYXRl
+IEF1dGhvcml0eSBsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+AoIBAQClvi4/O1MWeG5VvnLqxb+EkJNlOAtalIkW1REqNHx1am9wl+nvlykxpy3J
+/KxYMHYA5lHLHT4MPgB3nTLQn42iunztg9yzJuqj5PJ6rZkkRapR1Wi797eFBUxu
+Lt4vJChLwoyNJUp+3+x95It3NcENuxfxzUycDwTBdkz72gP5ayyG4R5vLsqnaKwo
+Pyoo1G00PUuDfkDVuw33dQ7sYH03smlPiLKU5FYKhPkwpkSGdWbA7gNzn5uiK5kH
+8vXCQDpJLTeoBW6f6wyOtcHuRvz127GTvoIJZE7n0COs9u0nrfXjkxs6VHiXRPFG
+KZaNi1YL/6hKeVYdt+eFtNBcjDpfAgMBAAGjgdQwgdEwDgYDVR0PAQH/BAQDAgEG
+MA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFDxeTKK93dNmEUpWZxETcy2+fV3f
+MB8GA1UdIwQYMBaAFBN4+S56wEK7546ZUh3naa7bs5h+MDsGCCsGAQUFBwEBBC8w
+LTArBggrBgEFBQcwAoYfaHR0cDovL2xvY2FsaG9zdDo4MjAwL3YxL3BraS9jYTAx
+BgNVHR8EKjAoMCagJKAihiBodHRwOi8vbG9jYWxob3N0OjgyMDAvdjEvcGtpL2Ny
+bDANBgkqhkiG9w0BAQsFAAOCAQEAM7eqEGBNZuDYBAlWs88vpfw1CMwahacdiGuY
+gzOG8hPZKTANocldPKDvjG4McSe7U9KTTELsGzDe/xB6d4RCWzBLwIE7NEUGK8fh
+py0nEFLhACHYm7+jcY14sPh1uT5r74Ytk/x/n4AOQIvgFY6nh3c0cHCCqUvykMf9
+GLL1bx5rSDu40+7HyYvsf5Q0Qpjlm4qBCCOdmD5RCR1bPScHDod+dLeE+KGb+gjK
+cADurxRAIGXUnd9qm58Z0N3AYOCLTfI93qpy4i36gLql6uwbNGAAyBbcrxqaW+1M
+woIpSO6HxwcOukRTinYFQariDpM3wcLGMZxYuplD6VDIc1Dy8Q==
+-----END CERTIFICATE-----
+```
+   *   Второй `private.pem` - приватный ключ.
+
+```shell
+vagrant@vagrant:~$ cat private.pem
+-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAmO2jOMYsm0CGbEquoT/pY+cQQRXHfU2qamXtFJUJUYXpIY3G
+fQvKXX1fwulyKIgNEWiKiW6F1eU7m+0ySj4IRgOc02d+gmSw9X9+dtlhDhZSy420
+Ii0+nUTX2zAe1Ceutlyp9XPL5Tdx1AU32B1mA51fGQFB0QvD5pwdCurFe7QOa5j0
+K9GmPW6edItT88VmVzej1IL2EDGvEn/vAYs3M8kheXqTqUO/VBzbDXvnlp1LMnM8
+pCAyECh+zN4BskhH5AroJwQziiA+ngMvI4gELk5Vys/0xGBKl9ObL/maM1gU0lWm
+IQ3DgWEyLhzqlFxpK4Vd/0jhwZsDVbnA+sA1aQIDAQABAoIBAEJqQg6wEkNCnJ5/
+OKQTC5s1iFubx81lY3Nd3L6pkyhyjbLizacU7cf4YRRXKhrsKzC6RCA3faxNJ7wq
+IUMY+aLegsdVFR4v+KJFwnh/I6VokICSg/6rw5utgElS9rCQo1HToIRWy+A6WhcI
+RR54dgtv1xMW9qyA/Y0zk3FgUG/OMOH/oL5LWqLbP36+bbc6AgNLpRpUMLbRALIi
+QIyqvnZgOrZeyayG7DfQRptCvtE6FnAfOvyGBraSn+7aUlTQLIt/sM/vcZjWEBXB
+2eiKhu9VX6lH9CLrezb+AlWMr5OWpZIt/Oamdp5vZLSmLe1cm/CQOEn5FwiN4Ted
+RLuglmECgYEAwNvVlDGgblfY7bLnsK4WCOwCzUOQH5QBRnvN4gOaYOW8SBIkDvI9
+gcyNChIAjIo5RpclHHSfhaC621+6GgCW1jmdB4zZco9PqelWW7gYWoP685fjvQPi
+GPCYBQJHFLIO01gfiSt8O4f0eJutheWk9XKzTmTXJ7zHteFs/8COhwUCgYEAyv8X
+hTJxUolWtUooWxFgM97lZUW5sho9+gAsg1UoRMz0pPXsJlC78IMvoDySTwzQdUTs
+6/dL1D1DYL8F/zIFedXsmzjvSWevx2HRnby9+R+g6CNrdV/AiSo8IeJeYJbe7lNE
+9lTTTh0rJSUuO3lbUbZfZF2A4dl2xQyNsQwYOhUCgYAUoC4yYDBZPLntigGvap7e
+q2cNTtl+FxUf1aPKNTpwfIFrb809b/jWBetblVtLrIi9nPKSHYLmBq+VQKKln0SC
+erzpjs2+q8cIU/Uxb/nizFStcqQflee7ZRfNCVZSx0xAnB8bS3RI5ZxmvbeMJ2hB
++9djXfOIw27Ua9x9abmUhQKBgQCZ5JHcNMWcoOnPPo0hnSalrFGUWSvSTfq2UPNu
+DV0d65N8i8OfuI0CZTHx9Hmm3Dwc60gCC9S87kTqT2codK+aEgfyFVOy/pxQN2RG
+hRQwjT3bPx70OMcqNY6o0YhjCX2wiAg8B0q6aXqQCoPmKraEWBIxcIGItuhHsqCo
+nFaxkQKBgFsXcqK/AtrM3zRQX6vvHjzaIQkvaTIO6ut6tlHq9MIguKCBw5xr/OVL
+tVNQcbIrEDL5A9tkfaTp2OfRxL1Nr5rA+V0xqDgOZCfqQIoINJBAktd/UXEcRDoQ
+TOuI4w1l2KHR7JnVZ288v3sDXzd+cRbiWycCmlLJuw1ehnB3ZnV8
+-----END RSA PRIVATE KEY-----
+```
+
+*   В конфигурационном файле `/sited-available/default` можно указать не `.crt` и `.key`, а файлы с расширением `.pem`:     
+
+```shell
+    # SSL configuration
+	#
+	listen 443 ssl default_server;
+	listen [::]:443 ssl default_server;
+	ssl_certificate /etc/nginx/ssl/chain.pem;
+	ssl_certificate_key /etc/nginx/ssl/private.pem;
+	#
+	# Note: You should disable gzip for SSL traffic.
+	# See: https://bugs.debian.org/773332
+```
+*   Протестируем:
+```shell
+root@vagrant:/etc/nginx/sites-available# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+*   И перезапустим `nginx`:
+```shell
+root@vagrant:/etc/nginx/sites-available# systemctl restart nginx
+root@vagrant:/etc/nginx/sites-available# systemctl status nginx.service
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2021-07-14 15:51:34 UTC; 3s ago
+       Docs: man:nginx(8)
+    Process: 30594 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 30605 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 30606 (nginx)
+      Tasks: 2 (limit: 1074)
+     Memory: 2.6M
+     CGroup: /system.slice/nginx.service
+             ├─30606 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+             └─30607 nginx: worker process
+
+Jul 14 15:51:34 vagrant systemd[1]: Starting A high performance web server and a reverse proxy server...
+Jul 14 15:51:34 vagrant systemd[1]: Started A high performance web server and a reverse proxy server.
+```
+*   Выполним запрос к `localhost`:
+```shell
+root@vagrant:/etc/nginx/sites-available# curl https://localhost
+curl: (60) SSL certificate problem: unable to get local issuer certificate
+More details here: https://curl.haxx.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+```
+*   И переходим к пункту 6 =)
+
+## 6. Модифицировав /etc/hosts и системный trust-store, добейтесь безошибочной с точки зрения HTTPS работы curl на ваш тестовый домен (отдающийся с localhost). Рекомендуется добавлять в доверенные сертификаты Intermediate CA. Root CA добавить было бы правильнее, но тогда при конфигурации nginx потребуется включить в цепочку Intermediate, что выходит за рамки лекции. Так же, пожалуйста, не добавляйте в доверенные сам сертификат хоста.
+*   Меняем `/etc/hosts`:
+```shell
+root@vagrant:/etc/nginx/ssl# vim /etc/hosts
+root@vagrant:/etc/nginx/ssl# cat /etc/hosts
+127.0.0.1	localhost
+127.0.1.1	vagrant.vm	vagrant
+127.0.0.1	netology.example.com  example.com
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+```
+*   Сформируем файл `.crt`, для этого извлечем все сертификаты с цепочкой CA:
+```shell
+agrant@vagrant:~$ openssl crl2pkcs7 -nocrl -certfile intermediate.cert.pem | openssl pkcs7 -print_certs -out netinter.crt
+vagrant@vagrant:~$ cat netinter.crt
+subject=CN = Intermediate Authority localhost
+
+issuer=CN = Root Authority localhost
+
+-----BEGIN CERTIFICATE-----
+MIIDsTCCApmgAwIBAgIUK2+hhiq3TWxmAFA6vJO0wTQe8R8wDQYJKoZIhvcNAQEL
+BQAwIzEhMB8GA1UEAxMYUm9vdCBBdXRob3JpdHkgbG9jYWxob3N0MB4XDTIxMDcx
+NTA2MzYxOVoXDTIyMDcxNTA2MzY0OVowKzEpMCcGA1UEAxMgSW50ZXJtZWRpYXRl
+-----END CERTIFICATE-----
+```
+*   Скопируем сертификат в `trust-store` и обновим системный каталог с ними:
+```shell
+vagrant@vagrant:~$ sudo cp netinter.crt /usr/local/share/ca-certificates/
+vagrant@vagrant:~$ sudo update-ca-certificates
+Updating certificates in /etc/ssl/certs...
+1 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+vagrant@vagrant:~$ sudo systemctl restart nginx
+vagrant@vagrant:~$ sudo systemctl status nginx
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2021-07-15 10:32:26 UTC; 5s ago
+       Docs: man:nginx(8)
+    Process: 61327 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 61339 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 61340 (nginx)
+      Tasks: 2 (limit: 1074)
+     Memory: 2.6M
+     CGroup: /system.slice/nginx.service
+             ├─61340 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+             └─61341 nginx: worker process
+
+Jul 15 10:32:26 vagrant systemd[1]: Starting A high performance web server and a reverse proxy server...
+Jul 15 10:32:26 vagrant systemd[1]: Started A high performance web server and a reverse proxy server.
+```
+*   Выполним `curl`:
+```shell
+vagrant@vagrant:~$ curl -I -s https://netology.example.com
 HTTP/1.1 200 OK
-HTTP/1.1 200 OK
-##--------------------------------------------------------------------------------------
+Server: nginx/1.18.0 (Ubuntu)
+Date: Thu, 15 Jul 2021 10:32:41 GMT
+Content-Type: text/html
+Content-Length: 612
+Last-Modified: Thu, 15 Jul 2021 06:25:18 GMT
+Connection: keep-alive
+ETag: "60efd4ce-264"
+Accept-Ranges: bytes
 ```
 
-*	Балансировщики:
-*	ip `192.168.1.10`:
-```shell
-##--------------------------------------------------------------------------------------
-## netology1 load balancer
-##--------------------------------------------------------------------------------------
-vagrant@netology1:~$ lsmod | grep -c ip_vs
-0
-vagrant@netology1:~# apt -y install ipvsadm; ipvsadm -Ln
-Reading package lists... Done
-Building dependency tree       
-Reading state information... Done
-Suggested packages:
-  heartbeat keepalived ldirectord
-The following NEW packages will be installed:
-  ipvsadm
-0 upgraded, 1 newly installed, 0 to remove and 135 not upgraded.
-Need to get 40.2 kB of archives.
-After this operation, 137 kB of additional disk space will be used.
-Get:1 http://archive.ubuntu.com/ubuntu focal/main amd64 ipvsadm amd64 1:1.31-1 [40.2 kB]
-Fetched 40.2 kB in 0s (157 kB/s)
-Selecting previously unselected package ipvsadm.
-(Reading database ... 41895 files and directories currently installed.)
-Preparing to unpack .../ipvsadm_1%3a1.31-1_amd64.deb ...
-Unpacking ipvsadm (1:1.31-1) ...
-Setting up ipvsadm (1:1.31-1) ...
-Processing triggers for man-db (2.9.1-1) ...
-Processing triggers for systemd (245.4-4ubuntu3.3) ...
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port Scheduler Flags
-  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
-##--------------------------------------------------------------------------------------
-```
+*DONE! =)*
 
-*	ip `192.168.1.30`:
-```shell
-##--------------------------------------------------------------------------------------
-## netology3 load balancer
-##--------------------------------------------------------------------------------------
-vagrant@netology3:~$ lsmod | grep -c ip_vs
-0
-root@netology3:/home/vagrant# apt -y install ipvsadm; ipvsadm -Ln
-Reading package lists... Done
-Building dependency tree       
-Reading state information... Done
-Suggested packages:
-  heartbeat keepalived ldirectord
-The following NEW packages will be installed:
-  ipvsadm
-0 upgraded, 1 newly installed, 0 to remove and 135 not upgraded.
-Need to get 40.2 kB of archives.
-After this operation, 137 kB of additional disk space will be used.
-Get:1 http://archive.ubuntu.com/ubuntu focal/main amd64 ipvsadm amd64 1:1.31-1 [40.2 kB]
-Fetched 40.2 kB in 0s (165 kB/s)
-Selecting previously unselected package ipvsadm.
-(Reading database ... 41895 files and directories currently installed.)
-Preparing to unpack .../ipvsadm_1%3a1.31-1_amd64.deb ...
-Unpacking ipvsadm (1:1.31-1) ...
-Setting up ipvsadm (1:1.31-1) ...
-Processing triggers for man-db (2.9.1-1) ...
-Processing triggers for systemd (245.4-4ubuntu3.3) ...
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port Scheduler Flags
-  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
-##--------------------------------------------------------------------------------------
-```
-*	Выбираем общий `floating ip` для балансировщиков `192.168.1.100`
-```shell
-##--------------------------------------------------------------------------------------
-# netology1 load balancer
-##--------------------------------------------------------------------------------------
-root@netology1:/home/vagrant# ipvsadm -A -t 192.168.1.100:80 -s rr
-root@netology1:/home/vagrant# ipvsadm -a -t 192.168.1.100:80 -r 192.168.1.13 -g -w 1
-root@netology1:/home/vagrant# ipvsadm -a -t 192.168.1.100:80 -r 192.168.1.40 -g -w 1
-root@netology1:/home/vagrant# ipvsadm -Ln
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port Scheduler Flags
-  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
-TCP  192.168.1.100:80 rr
-  -> 192.168.1.13:80              Route   1      0          0         
-  -> 192.168.1.40:80              Route   1      0          0    
+## 7. Ознакомьтесь с протоколом ACME и CA Let's encrypt. Если у вас есть во владении доменное имя с платным TLS-сертификатом, который возможно заменить на LE, или же без HTTPS вообще, попробуйте воспользоваться одним из предложенных клиентов, чтобы сделать веб-сайт безопасным (или перестать платить за коммерческий сертификат).
 
-root@netology1:/home/vagrant# ip addr add 192.168.1.100/24 dev eth1 label eth1:100
-root@netology1:/home/vagrant# ip -4 addr show eth1 | grep inet
-    inet 192.168.1.10/24 scope global eth1
-    inet 192.168.1.100/24 scope global secondary eth1:100
-##--------------------------------------------------------------------------------------
-## установим keepalived и пропишем конфигурационный файл:
-##--------------------------------------------------------------------------------------
-root@netology1:/home/vagrant# cat /etc/keepalived/keepalived.conf 
-vrrp_script chk_nginx {
-script "systemctl status nginx"
-interval 2
-}
-vrrp_instance VI_1 {
-state MASTER
-interface eth1
-virtual_router_id 33
-priority 100 / 50
-advert_int 1
-authentication {
-auth_type PASS
-auth_pass netology_secret
-}
-virtual_ipaddress {
-192.168.1.100/24 dev eth1
-}
-track_script {
-chk_nginx
-}
-}
+*   С протоколом `ACME` и CA `Let's enscrypt` знакомы, т.к. во владении есть домен [bikepower.ddns.net](https://bikepower.ddns.net/). Используем, в частности, как домашнее облако `nextcloud`
+*   Сертификат устанавливали по рекомендациям с [losst](https://losst.ru/kak-poluchit-sertifikat-let-s-encrypt) ещё до начала моего обучения на курсе)
+[cert_bikepower](pictures/bikepower.png)
 
-root@netology1:/home/vagrant# systemctl start keepalived
-root@netology1:/home/vagrant# systemctl status keepalived
-● keepalived.service - Keepalive Daemon (LVS and VRRP)
-     Loaded: loaded (/lib/systemd/system/keepalived.service; enabled; vendor preset: enabled)
-     Active: active (running) since Mon 2021-07-05 19:32:46 UTC; 1min 29s ago
-   Main PID: 24561 (keepalived)
-      Tasks: 2 (limit: 470)
-     Memory: 1.7M
-     CGroup: /system.slice/keepalived.service
-             ├─24561 /usr/sbin/keepalived --dont-fork
-             └─24573 /usr/sbin/keepalived --dont-fork
-
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: Registering Kernel netlink reflector
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: Registering Kernel netlink command channel
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: Opening file '/etc/keepalived/keepalived.conf'.
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: WARNING - default user 'keepalived_script' for scr>
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: (Line 13) Truncating auth_pass to 8 characters
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: WARNING - script `systemctl` resolved by path sear>
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: SECURITY VIOLATION - scripts are being executed bu>
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: Registering gratuitous ARP shared channel
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: VRRP_Script(chk_nginx) succeeded
-Jul 05 19:32:47 netology1 Keepalived_vrrp[24573]: (VI_1) Entering BACKUP STATE
-##--------------------------------------------------------------------------------------
-```
-```shell
-##--------------------------------------------------------------------------------------
-## netology3 load balancer
-##--------------------------------------------------------------------------------------
-root@netology3:/home/vagrant# ipvsadm -A -t 192.168.1.100:80 -s rr
-root@netology3:/home/vagrant# ipvsadm -a -t 192.168.1.100:80 -r 192.168.1.40 -g -w 1
-root@netology3:/home/vagrant# ipvsadm -a -t 192.168.1.100:80 -r 192.168.1.13 -g -w 1
-root@netology3:/home/vagrant# ipvsadm -Ln
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port Scheduler Flags
-  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
-TCP  192.168.1.100:80 rr
-  -> 192.168.1.13:80              Route   1      0          0         
-  -> 192.168.1.40:80              Route   1      0          0   
-
-root@netology3:/home/vagrant# ip addr add 192.168.1.100/24 dev eth1 label eth1:100
-root@netology3:/home/vagrant# ip -4 addr show eth1 | grep inet
-    inet 192.168.1.30/24 scope global eth1
-    inet 192.168.1.100/24 scope global secondary eth1:100  
-
-##--------------------------------------------------------------------------------------
-## установим keepalived и пропишем конфигурационный файл:
-##--------------------------------------------------------------------------------------
-root@netology3:/etc/keepalived# cat /etc/keepalived/keepalived.conf 
-vrrp_script chk_nginx {
-script "systemctl status nginx"
-interval 2
-}
-vrrp_instance VI_1 {
-state BACKUP
-interface eth1
-virtual_router_id 33
-priority 100 / 50
-advert_int 1
-authentication {
-auth_type PASS
-auth_pass netology_secret
-}
-virtual_ipaddress {
-192.168.1.100/24 dev eth1
-}
-track_script {
-chk_nginx
-}
-}
-
-root@netology3:/home/vagrant# systemctl start keepalived
-root@netology3:/home/vagrant# systemctl status keepalived
-● keepalived.service - Keepalive Daemon (LVS and VRRP)
-     Loaded: loaded (/lib/systemd/system/keepalived.service; enabled; vend>
-     Active: active (running) since Mon 2021-07-05 19:32:34 UTC; 23s ago
-   Main PID: 24451 (keepalived)
-      Tasks: 2 (limit: 470)
-     Memory: 1.7M
-     CGroup: /system.slice/keepalived.service
-             ├─24451 /usr/sbin/keepalived --dont-fork
-             └─24463 /usr/sbin/keepalived --dont-fork
-
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: Opening file '/etc/keepa>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: WARNING - default user '>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: (Line 13) Truncating aut>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: WARNING - script `system>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: SECURITY VIOLATION - scr>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: Registering gratuitous A>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: VRRP_Script(chk_nginx) s>
-Jul 05 19:32:34 netology3 Keepalived_vrrp[24463]: (VI_1) Entering BACKUP S>
-Jul 05 19:32:45 netology3 Keepalived_vrrp[24463]: (VI_1) Backup received p>
-Jul 05 19:32:46 netology3 Keepalived_vrrp[24463]: (VI_1) Entering MASTER S>
-##--------------------------------------------------------------------------------------
-```
-*	Для `nginx` добавляем возможность обрабатывать пересланные балансировщиками пакеты:
-```shell
-##--------------------------------------------------------------------------------------
-##netology2 real server
-##--------------------------------------------------------------------------------------
-root@netology2:/home/vagrant# ip addr add 192.168.1.100/24 dev lo label lo:100
-root@netology2:/home/vagrant# ip -4 addr show lo | grep inet
-    inet 127.0.0.1/8 scope host lo
-    inet 192.168.1.100/24 scope global lo:100
-##--------------------------------------------------------------------------------------
-```
-```shell
-##--------------------------------------------------------------------------------------
-## netology4 real server
-##--------------------------------------------------------------------------------------
-root@netology4:/home/vagrant# ip addr add 192.168.1.100/24 dev lo label lo:100
-root@netology4:/home/vagrant# ip -4 addr show lo | grep inet
-    inet 127.0.0.1/8 scope host lo
-    inet 192.168.1.100/24 scope global lo:100
-##--------------------------------------------------------------------------------------
-```
-*	Определяем режим отправки ответов на запросы ARP и ограничения для локального IP-адреса из IP-пакетов запроса ARP:
-```shell
-##--------------------------------------------------------------------------------------
-##netology2 real server
-##--------------------------------------------------------------------------------------
-root@netology2:/home/vagrant# sysctl -w net.ipv4.conf.all.arp_announce=2
-net.ipv4.conf.all.arp_announce = 2
-root@netology2:/home/vagrant# sysctl -w net.ipv4.conf.all.arp_ignore=1
-net.ipv4.conf.all.arp_ignore = 1
-##--------------------------------------------------------------------------------------
-```
-```shell
-##--------------------------------------------------------------------------------------
-##netology4 real server
-##--------------------------------------------------------------------------------------
-root@netology4:/home/vagrant# sysctl -w net.ipv4.conf.all.arp_ignore=1
-net.ipv4.conf.all.arp_ignore = 1
-root@netology4:/home/vagrant# sysctl -w net.ipv4.conf.all.arp_announce=2
-net.ipv4.conf.all.arp_announce = 2
-##--------------------------------------------------------------------------------------
-```
-
-*	Выполним `arping` с клиента:
-```shell
-##--------------------------------------------------------------------------------------
-##netology5 client
-##--------------------------------------------------------------------------------------
-root@netology5:/home/vagrant# arping -c1 -I eth1 192.168.1.100
-ARPING 192.168.1.100
-60 bytes from 08:00:27:05:04:cf (192.168.1.100): index=0 time=1.386 msec
-
---- 192.168.1.100 statistics ---
-1 packets transmitted, 1 packets received,   0% unanswered (0 extra)
-rtt min/avg/max/std-dev = 1.386/1.386/1.386/0.000 ms
-##--------------------------------------------------------------------------------------
-```
-*	Затем запустим на клиенте `curl` в цикле:
-```shell
-##--------------------------------------------------------------------------------------
-##netology5 client
-##--------------------------------------------------------------------------------------
-root@netology5:/home/vagrant# for i in {1..50}; do curl -I -s 192.168.1.100>/dev/null; done
-##--------------------------------------------------------------------------------------
-```
-
-*	После завершения цикла по `curl` проверим статистику *netology1* (**MASTER**):
-```shell
-##--------------------------------------------------------------------------------------
-## netology1 load balancer
-##--------------------------------------------------------------------------------------
-root@netology1:/proc/net# ipvsadm -Ln --stats
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port               Conns   InPkts  OutPkts  InBytes OutBytes
-  -> RemoteAddress:Port
-TCP  192.168.1.100:80                   61      183      150    10980    13200
-  -> 192.168.1.13:80                    30       90       75     5400     6600
-  -> 192.168.1.40:80                    31       93       75     5580     6600
-##--------------------------------------------------------------------------------------
-```
-
-*	После завершения цикла по `curl` проверим статистику *netology3* (**BACKUP**):
-```shell
-##--------------------------------------------------------------------------------------
-## netology3 load balancer
-##--------------------------------------------------------------------------------------
-root@netology3:/etc/keepalived# ipvsadm -Ln --stats
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port               Conns   InPkts  OutPkts  InBytes OutBytes
-  -> RemoteAddress:Port
-TCP  192.168.1.100:80                    0        0        0        0        0
-  -> 192.168.1.13:80                     0        0        0        0        0
-  -> 192.168.1.40:80                     0        0        0        0        0
-##--------------------------------------------------------------------------------------
-```
-
-* После, экспериментируя, перезапускала службы. В результате, `keepalived` распределять нагрузку стал через **BACKUP**. 
-
-* Запустила команду `curl` от клиента в цикле: 
-```shell
-##--------------------------------------------------------------------------------------
-##netology5 client
-##--------------------------------------------------------------------------------------
-root@netology5:/home/vagrant# for i in {1..5}; do curl -I -s 192.168.1.100>/dev/null; done
-##--------------------------------------------------------------------------------------
-```
-* С `tcpdump` проверила, что происходит на `nginx'ах`:
-
-```shell
-##--------------------------------------------------------------------------------------
-## netology2 real server
-##--------------------------------------------------------------------------------------
-root@netology2:/home/vagrant# tcpdump -i eth1
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
-20:21:24.878272 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:25.101376 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:25.878617 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:26.125432 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:26.879043 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:27.161933 ARP, Request who-has 192.168.1.40 tell 192.168.1.10, length 46
-20:21:27.879548 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:28.173241 ARP, Request who-has 192.168.1.40 tell 192.168.1.10, length 46
-20:21:28.879994 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:29.197179 ARP, Request who-has 192.168.1.40 tell 192.168.1.10, length 46
-20:21:29.880248 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:30.236116 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:30.880832 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:31.245615 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:31.881302 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:32.269259 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:32.881661 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:32.881661 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:33.881919 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:34.882432 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-
-##--------------------------------------------------------------------------------------
-```
-```shell
-##--------------------------------------------------------------------------------------
-## netology4 real server
-##--------------------------------------------------------------------------------------
-root@netology4:/home/vagrant# tcpdump -i eth1
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
-20:21:29.880899 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:30.236799 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:30.881410 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:31.246223 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:31.881910 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:32.269874 ARP, Request who-has 192.168.1.13 tell 192.168.1.10, length 46
-20:21:32.882328 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:33.882550 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:34.883088 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-20:21:35.883406 IP 192.168.1.10 > vrrp.mcast.net: VRRPv2, Advertisement, vrid 33, prio 100, authtype simple, intvl 1s, length 20
-##--------------------------------------------------------------------------------------
-```
-
-*	Статистика по балансировщикам:
-```shell
-##--------------------------------------------------------------------------------------
-## netology1 load balancer
-##--------------------------------------------------------------------------------------
-root@netology1:/home/vagrant# ipvsadm -Ln --stats
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port               Conns   InPkts  OutPkts  InBytes OutBytes
-  -> RemoteAddress:Port
-TCP  192.168.1.100:80                    0        0        0        0        0
-  -> 192.168.1.13:80                     0        0        0        0        0
-  -> 192.168.1.40:80                     0        0        0        0        0
-##--------------------------------------------------------------------------------------
-```
-```shell
-##--------------------------------------------------------------------------------------
-## netology3 load balancer
-##--------------------------------------------------------------------------------------
-root@netology3:/home/vagrant# ipvsadm -Ln --stats
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port               Conns   InPkts  OutPkts  InBytes OutBytes
-  -> RemoteAddress:Port
-TCP  192.168.1.100:80                   68      203        0    12180        0
-  -> 192.168.1.13:80                    34      101        0     6060        0
-  -> 192.168.1.40:80                    34      102        0     6120        0
-##--------------------------------------------------------------------------------------
-```
-* Затем *netology3* по команде отправился в ребут. Повторив запросы с `curl` (for 1..5) и `tcpdump`, проверила работу оставшегося балансировщика:
-```shell
-##--------------------------------------------------------------------------------------
-## netology1 load balancer
-##--------------------------------------------------------------------------------------
-root@netology1:/home/vagrant# ipvsadm -Ln --stats
-IP Virtual Server version 1.2.1 (size=4096)
-Prot LocalAddress:Port               Conns   InPkts  OutPkts  InBytes OutBytes
-  -> RemoteAddress:Port
-TCP  192.168.1.100:80                    5       15        0      900        0
-  -> 192.168.1.13:80                     3        9        0      540        0
-  -> 192.168.1.40:80                     2        6        0      360        0
-##--------------------------------------------------------------------------------------
-```
-
-## 3. В лекции мы использовали только 1 VIP адрес для балансировки. У такого подхода несколько отрицательных моментов, один из которых – невозможность активного использования нескольких хостов (1 адрес может только переехать с master на standby). Подумайте, сколько адресов оптимально использовать, если мы хотим без какой-либо деградации выдерживать потерю 1 из 3 хостов при входящем трафике 1.5 Гбит/с и физических линках хостов в 1 Гбит/с? Предполагается, что мы хотим задействовать 3 балансировщика в активном режиме (то есть не 2 адреса на 3 хоста, один из которых в обычное время простаивает).
-
-*	Несколько дней потратила на изучение схем балансировки сетевого трафика. После разбора задач с Булатом Замиловым стало понятно, 
-	что у каждого хоста должно быть несколько балансировщиков. Здесь я постаралась это показать:
->[2 вариант балансировки](pictures/2вар.jpg)
-
->	Таким образом, у каждого балансировщика по два VIP. Всего адресов 6.
-
-**НО ОСТАЛОСЬ ТАК МНОГО ВОПРОСОВ...**
-*	У меня точно не хватает знаний в этой области, однако кажется, что задача требует подумать, как с использованием других технологий распределить трафик...
-1. В случае использования только `VRRP/LVS` и условий нашей задачи (только 3 балансировщика на 3 реала) физически хост, который может принимать только `1 Гбит/с` не должен быть балансировщиком, через которого, в теории, должен проходить линк в `1,5 Гбит/с`.
-2. Если возникает ситуация, когда балансировщик может максимум выжать `1 Гбит/с`, то необходимо проектировать отказоустойчивый кластер с резервным балансировщиком, при этом, настраивая балансировку на программном уровне (`L7`), которая бы распределяла нагрузку на оставшиеся балансировщики хотя бы пополам (`0,75 Гбит/с`);
-3. Самым быстрым решением этой задачи было добавить прокси-сервер, настроить, к примеру, `nginx` с `upstream` и распределением адресов, чтоб клиент попадал сначала на Прокси, который бы дальше распределял трафик, опрашивая балансировщиков об их работоспособности.
-
-*У меня нет четкого ответа на этот вопрос, к сожалению. И боюсь, без прямого указания, где я ошибаюсь, так и не пойму, как использовать только VIP адреса, которые могли бы распределять трафик между физическими хостами пополам...*
-
-<details>
-<summary>Прошлый вариант</summary>
-
-> >Попыталась нарисовать то, как представляю себе схему сети с тремя балансировщиками: [3ex](https://bikepower.ddns.net/index.php/s/6reHwzTnrJibbmx)
-
-*	Есть три балансировщика и три хоста;
-*	Необходимо попарно определить, какие из балансировщиков будут взаимодействовать между собой; 
-*	Таким образом, выделяются 3 VIP адреса, между которыми распределяется нагрузка на серверы (*на схеме MASTER - сплошные линии от балансировщиков, BACKUP - прерывистые*).
-	 
-| VIP				 | MASTER 	IP		| BACKUP  IP	 	| Server MASTER	| Server's BACKUP			|
-:-------------------:|:----------------:|:-----------------:|:-------------:|:-------------------------:|
-|192.168.2.115		 | 192.168.2.110 	|  192.168.2.111 	|**Server1**	|**Server2**	**Server3**	|
-|192.168.2.116		 | 192.168.2.112 	|  192.168.2.110 	|**Server3**	|**Server1**	**Server2**	|
-|192.168.2.117		 | 192.168.2.111 	|  192.168.2.112 	|**Server2**	|**Server1**	**Server3**	|
-
-*	Все эти данные описаны в конфигурационных файлах в файле, что приложила к задаче (опустила задания значений `vrrp_script`, `track_script`);
-*	На серверах прописаны балансировщики таким образом, чтоб они могли компенсировать потерю одного из них без потери соединения к серверу;
-*	В идеале нужно добавить HAProxy для распределения трафика между балансировщиками. Однако, в теории я понимаю, как он работает, но отображать на схеме не рискнула.
-
-*Таким образом, выделено три VIP адреса для балансировки нагрузки*	
-</details>
