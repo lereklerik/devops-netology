@@ -1,2 +1,0 @@
-new line
-New text. Terminal test in IDEA

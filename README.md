@@ -1,381 +1,260 @@
-# Домашнее задание к занятию "4.1. Командная оболочка Bash: Практические навыки"
+# Домашнее задание к занятию "4.2. Использование Python для решения типовых DevOps задач"
 
 ## 1. Есть скрипт:
 ```shell
-a=1
-b=2
-c=a+b
-d=$a+$b
-e=$(($a+$b))
+#!/usr/bin/env python3
+a = 1
+b = '2'
+c = a + b
 ```
-## Какие значения переменным `c`,`d`,`e` будут присвоены? Почему?
+#####   1.1. Какое значение будет присвоено переменной `c`?
+#####   1.2. Как получить для переменной `c` значение 12?
+#####   1.3. Как получить для переменной `c` значение 3?
 
-*   значением переменной `c` является `a+b`
-*   значением переменной `d` является `a+b`
-*   значением переменной `e` является `3`
-
+*   Мы не сможем неявно присвоить переменной `c` какое-либо однозначное значение без явного преобразования слагаемых к какому-то типу:
 ```shell
-~$ a=1      # переменной a неявно присвоено числовое значение 1, т.е. a - строка с целым числом
-~$ b=2      # переменной b неявно присвоено числовое значение 2, т.е. b - строка с целым числом
-~$ c=a+b    # переменной c неявно присвоено строковое значение 'a+b', c - строка с символьными значениями
-~$ echo $c
-a+b
-~$ d=$a+$b  # переменной d передали по ссылке значения a и b, 
-            # однако арифметическая операция не интерпретируется как сложения без конструкции $(())
-            # таким образом, оболочка воспринимает это как строку
-~$ echo $d
-1+2
-~$ e=$(($a+$b)) ## переменной e передали конструкцию, которая позволяет определить математическую операцию сложения a и b,
-                ## значения которых оболочкой интерпретируются как числовые
-~$ echo $e
+>>> a = 1
+>>> b = '2'
+>>> c = a + b
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: unsupported operand type(s) for +: 'int' and 'str'
+```
+*   Если мы преобразуем переменную `a` к строке, то в переменную `c` запишется результат конкатенации строк '1' и '2' (`a` и `b` соответственно), что в конечном итоге запишет в `c`значение **12**: 
+```shell
+>>> c = str(a) + b
+>>> c
+12
+```
+*  Если мы преобразуем переменную `b` к типу `int`, то в переменную `c` запишется результат сложения чисел `1 + 2`: 
+```shell
+>>> c = a + int(b)
+>>> c
 3
 ```
 
-## 2. На нашем локальном сервере упал сервис и мы написали скрипт, который постоянно проверяет его доступность, записывая дату проверок до тех пор, пока сервис не станет доступным. В скрипте допущена ошибка, из-за которой выполнение не может завершиться, при этом место на Жёстком Диске постоянно уменьшается. Что необходимо сделать, чтобы его исправить:
+## 2. Мы устроились на работу в компанию, где раньше уже был DevOps Engineer. Он написал скрипт, позволяющий узнать, какие файлы модифицированы в репозитории, относительно локальных изменений: 
 ```shell
-while ((1==1)
-do
-curl https://localhost:4757
-if (($? != 0))
-then
-date >> curl.log
-fi
-done
-```
-*   Думаю, что нужно добавить закрывающую скобку у `while`:
+#!/usr/bin/env python3
 
-```shell
-while ((1==1)) # вот тут =)
-do
-curl https://localhost:4757
-if (($? != 0))
-then
-date >> curl.log
-fi
-done
-```
-*   Протестируем на своем ПК с использованием `vagrant` и `vault`:
-*   Напишем скрипт. Стучаться будем к `0.0.0.0:8200`:
-```shell
-~/WorkFolder$ mkdir scripts; cd scripts; vim ex4.1_01.sh
-~/WorkFolder$ cat ex4.1_01.sh
-#!/bin/bash
-while ((1==1))
-do
-curl http://0.0.0.0:8200
-if (($? != 0))
-then
-date >> curl.log
-fi
-sleep 10
-done
-~/WorkFolder/scripts$ chmod u+x ex4.1_01.sh
-```
-*   Запустим скрипт:
-```shell
-:~/WorkFolder/scripts$ ./ex4.1_01.sh 
-curl: (56) Recv failure: Соединение разорвано другой стороной
-curl: (56) Recv failure: Соединение разорвано другой стороной
-curl: (56) Recv failure: Соединение разорвано другой стороной
-curl: (56) Recv failure: Соединение разорвано другой стороной
-curl: (56) Recv failure: Соединение разорвано другой стороной
-```
-*   В это время поднимем сервер `vault` с доступом к UI по адресу `http://0.0.0.0:8200`:
-```shell
-vagrant@vagrant:~$ vault server -dev -dev-listen-address="0.0.0.0:8200"
-==> Vault server configuration:
+import os
 
-             Api Address: http://0.0.0.0:8200
-                     Cgo: disabled
-         Cluster Address: https://0.0.0.0:8201
-              Go Version: go1.15.13
-              Listener 1: tcp (addr: "0.0.0.0:8200", cluster address: "0.0.0.0:8201", max_request_duration: "1m30s", max_request_size: "33554432", tls: "disabled")
-               Log Level: info
-                   Mlock: supported: true, enabled: false
-           Recovery Mode: false
-                 Storage: inmem
-                 Version: Vault v1.7.3
-             Version Sha: 5d517c864c8f10385bf65627891bc7ef55f5e827
-
-==> Vault server started! Log data will stream in below:
+bash_command = ["cd ~/netology/sysadm-homeworks", "git status"]
+result_os = os.popen(' && '.join(bash_command)).read()
+is_change = False
+for result in result_os.split('\n'):
+    if result.find('modified') != -1:
+        prepare_result = result.replace('\tmodified:   ', '')
+        print(prepare_result)
+        break
 ```
-*   Вывод работы скрипта изменился:
+## Этим скриптом недовольно начальство, потому что в его выводе есть не все изменённые файлы, а также непонятен полный путь к директории, где они находятся. Как можно доработать скрипт ниже, чтобы он исполнял требования вашего руководителя?
+
+*   Проверим изменения в локальном репозитории: [git status](pictures/4.2_py.png)
 ```shell
-~/WorkFolder/scripts$ ./ex4.1_01.sh 
-curl: (56) Recv failure: Соединение разорвано другой стороной
-curl: (56) Recv failure: Соединение разорвано другой стороной
-<a href="/ui/">Temporary Redirect</a>.
+На ветке main
+Ваша ветка опережает «gitlab/main» на 34 коммита.
+  (используйте «git push», чтобы опубликовать ваши локальные коммиты)
 
-<a href="/ui/">Temporary Redirect</a>.
+Изменения, которые будут включены в коммит:
+  (используйте «git reset HEAD <файл>…», чтобы убрать из индекса)
 
-<a href="/ui/">Temporary Redirect</a>.
+	изменено:      README.md
+	удалено:       first.txt
+	удалено:       has_been_moved.txt
+	скопировано:   README.md -> last_home_exercises/prev4.1ex.md
+	удалено:       last_home_exercises/test.txt
 
-<a href="/ui/">Temporary Redirect</a>.
+Изменения, которые не в индексе для коммита:
+  (используйте «git add <файл>…», чтобы добавить файл в индекс)
+  (используйте «git checkout -- <файл>…», чтобы отменить изменения
+   в рабочем каталоге)
+
+	изменено:      README.md
 ```
-*   `curl.log` (из-за `sleep` проверяем каждые 10 сек):
+
+*   Проанализировав скрипт, поняла, что в моем случае придется проверять ещё и кириллицу в статусах, т.к. `git` у меня для ленивых, и все пишет на русском.
+*   Также, `git` отслеживает не только модифицируемые файлы, а еще и удаленные, новые или перемещаемые. В целом, мой вариант учел все такие ситуации.
+*   Учитывая, что нет смысла выводить данные в таком же виде, что выводит нам `git status`, позволила себе несколько усложнить скрипт, добавив сбор данных по файлам в словарь, который в итоге и вывожу в консоли
+*   Скрипт [script_vim](pictures/4.2.2_py.png):
 ```shell
-:~/WorkFolder/scripts$ tail curl.log
-Чт июл 15 22:20:58 MSK 2021
-Чт июл 15 22:21:23 MSK 2021
-Чт июл 15 22:21:33 MSK 2021
-Чт июл 15 22:21:43 MSK 2021
-Чт июл 15 22:21:53 MSK 2021
-Чт июл 15 22:22:03 MSK 2021
-Чт июл 15 22:22:13 MSK 2021
-Чт июл 15 22:22:23 MSK 2021
-Чт июл 15 22:22:33 MSK 2021
-Чт июл 15 22:22:43 MSK 2021
+#!/usr/bin/env  python3
+
+import os
+
+bash_command = ["cd ~/gitProjects/devops-netology", "git status"]
+path_of_gitDir = bash_command[0][3:]
+result_os = os.popen(' && '.join(bash_command)).read()
+print("Проверяемая директория:" + path_of_gitDir)
+if result_os:
+    print("------Файлы-------")
+    file_dict = {}
+    for result in result_os.split('\n'):
+        result = result.strip('\t')
+        if (result.startswith("изменено:") or result.startswith("modified:")) \
+            or (result.startswith("новый файл:") or result.startswith("new file:")) \
+                or (result.startswith("удалено:") or result.startswith("deleted:")) \
+                or (result.startswith("скопировано:") or result.startswith("renamed:")):
+            key, value = list(result.split(":"))
+            value = str(value).lstrip(' ')
+            tmp_set = set()
+            tmp_set.add(value)
+            if file_dict.get(key) is None:
+                file_dict.setdefault(key, tmp_set)
+            else:
+                prev_set = set(file_dict.get(key))
+                tmp_set.update(prev_set)
+                file_dict[key] = tmp_set
+
+    for k, v in file_dict.items():
+        print(f'{k}:')
+        for elem in v:
+            print(f'*   {elem}')
+else:
+    print("Измененных файлов не найдено")
+```
+*   Выдали права на чтение, запустили файл:
+```shell
+lerekler@PAVILION:~/gitProjects/devops-netology$ (main)/home/lerekler/test.py 
+Проверяемая директория:~/gitProjects/devops-netology
+------Файлы-------
+изменено:
+*   next_home_exercises/getChgFiles.py
+*   README.md
+удалено:
+*   first.txt
+*   last_home_exercises/test.txt
+*   has_been_moved.txt
+скопировано:
+*   README.md -> last_home_exercises/prev4.1ex.md
+новый файл:
+*   next_home_exercises/getChgFiles.py
+*   pictures/4.2.2_py.png
+*   pictures/4.2_py.png
 ```    
-*   Скрин:
-[screenshot1](pictures/script1.png)
+*   Как видно, предыдущий файл README.md с прошлой домашней работы я перекладываю в другую папку и переименовываю
+*   Сам скрипт присутствует в проекте [getChgFiles](scripts/getChgFiles.py)
 
-## 3. Необходимо написать скрипт, который проверяет доступность трёх IP: 192.168.0.1, 173.194.222.113, 87.250.250.242 по 80 порту и записывает результат в файл log. Проверять доступность необходимо пять раз для каждого узла.
+P.S. Python только стала изучать, по стилистике и коду могут быть провалы, т.к. в основном программирую на Java, но стараюсь
 
-*   Мой хост находится в первой подсети: `192.168.1.1`
+## 3. Доработать скрипт выше так, чтобы он мог проверять не только локальный репозиторий в текущей директории, а также умел воспринимать путь к репозиторию, который мы передаём как входной параметр. Мы точно знаем, что начальство коварное и будет проверять работу этого скрипта в директориях, которые не являются локальными репозиториями
+
+* Учитывая, что репозиторий могут ввести любой, необходимо будет убрать `~` из команды перехода к директории
+* Помимо этого требуется проверить, что путь существует и вообще является путем, здесь также воспользуемся модулем `os.path`
+* Для передачи пути используем модуль `sys`
+* Сбор наименований измененных файлов в словарь вынесем в отдельный метод `get_file_dict()`
+* Скрипт [script3](pictures/4.2.3py.png):
+
 ```shell
-$ ip route show
-default via 192.168.1.1 dev wlo1 proto dhcp metric 600 
-169.254.0.0/16 dev wlo1 scope link metric 1000 
-192.168.1.0/24 dev wlo1 proto kernel scope link src 192.168.1.4 metric 600
-```    
+#!/usr/bin/env  python3
 
-*   Поэтому для чистоты эксперимента заменила первый адрес из задания на него.
-*   Скрипт:
-```shell
-#!/bin/bash
-server_address_array=("192.168.1.1" "173.194.222.113" "87.250.250.242")
-for (( i=0; i <${#server_address_array[@]}; i++ ))
-do
-n=5	                                      # добавила итератор, начальное значение = 5
-echo "http://${server_address_array[$i]}" # в bash выводим проверяемое значение адреса (учитывая, что их немного, оставила так)
-	while (($n > 0))                      # цикл будет выполняться до тех пор, пока каждый адрес не проанализируется 5 раз
-	do
-		echo "$( date +"%y-%m-%d %T" ); iteration $n; addr=http://${server_address_array[$i]}:">>file.log # в лог записываем информацию по дате запуска команды, номеру итерации и адресу сервера
-		curl -I -s http://${server_address_array[$i]}&>>file.log                                          # а также, получаемый ответ по результату выполнения команды
-		let "n -= 1"                      # уменьшаем значение итерируемой переменной в цикле
-	done
-done
+import os
+import sys
+
+dir_path = sys.argv[1]
+
+### метод сбора файлов
+def get_file_dict():
+    global file_dict
+    file_dict = {}
+    for result in result_os.split('\n'):
+        result = result.strip('\t')
+        if (result.startswith("изменено:") or result.startswith("modified:")) \
+                or (result.startswith("новый файл:") or result.startswith("new file:")) \
+                or (result.startswith("удалено:") or result.startswith("deleted:")) \
+                or (result.startswith("скопировано:") or result.startswith("renamed:")):
+            key, value = list(result.split(":"))
+            value = str(value).lstrip(' ')
+            tmp_set = set()
+            tmp_set.add(value)
+            if file_dict.get(key) is None:
+                file_dict.setdefault(key, tmp_set)
+            else:
+                prev_set = set(file_dict.get(key))
+                tmp_set.update(prev_set)
+                file_dict[key] = tmp_set
+    return file_dict
+### проверка введенного значения пути
+if not dir_path.startswith("/"):
+    dir_path = "/" + dir_path
+
+if os.path.exists(dir_path):
+    bash_command = [f"cd {dir_path}", "git status"]
+    path_of_gitDir = bash_command[0][3:]
+    result_os = os.popen(' && '.join(bash_command)).read()
+    print("Проверяемая директория:" + path_of_gitDir)
+    if result_os:
+        file_dict = dict(get_file_dict())
+        if not file_dict:
+            print("Измененных файлов не найдено")
+        else:
+            print("------Файлы-------")
+            for k, v in file_dict.items():
+                print(f'{k}:')
+                for elem in v:
+                    print(f'*   {elem}')
+    else:
+        print("Измененных файлов не найдено")
+else:
+    print("Путь не найден")
 ```
-*   Выдадим права на исполнение и запустим скрипт:
+* Проверим работу скрипта. Запустим из `/home/user/Documents` с параметром - путь до папки, в которой отсутствует **git**-репозиторий:
 ```shell
-$ chmod u+x ex4.1_02.sh 
-$ ./ex4.1_02.sh 
-http://192.168.1.1
-http://173.194.222.113
-http://87.250.250.242
-
+lerekler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory /usr/local/bin
+fatal: not a git repository (or any of the parent directories): .git
+Проверяемая директория:/usr/local/bin
+Измененных файлов не найдено
 ```
-*   Скрипт отработал, посмотрим лог:
+* Проверим с неправильным путем:
 ```shell
-~/WorkFolder/scripts$ cat file.log 
-$ cat file.log 
-21-07-16 22:55:35; iteration 5; addr=http://192.168.1.1:
-HTTP/1.1 200 OK
-Server: 
-Accept-Ranges: bytes
-Connection: close
-Content-Type: text/html; charset=utf-8
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data:
-Cache-Control: no-cache,no-store
-Pragma: no-cache
-Content-Length: 38750
-Set-Cookie: _TESTCOOKIESUPPORT=1; PATH=/; HttpOnly
-X-Frame-Options: DENY
+lerekler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory .home/lerekler/gitProjects/libgit
+Путь не найден
+```
+* Протестируем с репозиторием, в котором веду этот проект: 
+```shell
+lerekler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory home/lerekler/gitProjects/devops-netology
+Проверяемая директория:/home/lerekler/gitProjects/devops-netology
+------Файлы-------
+изменено:
+*   scripts/getChgFilesOtherDirectory.py
+*   scripts/getChgFiles.py
+*   README.md
+удалено:
+*   first.txt
+*   last_home_exercises/test.txt
+*   has_been_moved.txt
+скопировано:
+*   README.md -> last_home_exercises/prev4.1ex.md
+новый файл:
+*   scripts/getChgFilesOtherDirectory.py
+*   scripts/getChgFiles.py
+*   pictures/4.2_py.png
+*   pictures/4.2.2_py.png
+```
+* Протестируем с тестовым **git**-репозиторием. Сначала просто просмотрим состояние:
+```shell
+lerekler@PAVILION:~/gitProjects/gitNetology$ (master)git status
+На ветке master
+Изменения, которые будут включены в коммит:
+  (используйте «git reset HEAD <файл>…», чтобы убрать из индекса)
 
-21-07-16 22:55:36; iteration 4; addr=http://192.168.1.1:
-HTTP/1.1 200 OK
-Server: 
-Accept-Ranges: bytes
-Connection: close
-Content-Type: text/html; charset=utf-8
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data:
-Cache-Control: no-cache,no-store
-Pragma: no-cache
-Content-Length: 38750
-Set-Cookie: _TESTCOOKIESUPPORT=1; PATH=/; HttpOnly
-X-Frame-Options: DENY
+	изменено:      contributing.md
 
-21-07-16 22:55:36; iteration 3; addr=http://192.168.1.1:
-HTTP/1.1 200 OK
-Server: 
-Accept-Ranges: bytes
-Connection: close
-Content-Type: text/html; charset=utf-8
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data:
-Cache-Control: no-cache,no-store
-Pragma: no-cache
-Content-Length: 38750
-Set-Cookie: _TESTCOOKIESUPPORT=1; PATH=/; HttpOnly
-X-Frame-Options: DENY
+Изменения, которые не в индексе для коммита:
+  (используйте «git add <файл>…», чтобы добавить файл в индекс)
+  (используйте «git checkout -- <файл>…», чтобы отменить изменения
+   в рабочем каталоге)
 
-21-07-16 22:55:36; iteration 2; addr=http://192.168.1.1:
-HTTP/1.1 200 OK
-Server: 
-Accept-Ranges: bytes
-Connection: close
-Content-Type: text/html; charset=utf-8
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data:
-Cache-Control: no-cache,no-store
-Pragma: no-cache
-Content-Length: 38750
-Set-Cookie: _TESTCOOKIESUPPORT=1; PATH=/; HttpOnly
-X-Frame-Options: DENY
-
-21-07-16 22:55:36; iteration 1; addr=http://192.168.1.1:
-HTTP/1.1 200 OK
-Server: 
-Accept-Ranges: bytes
-Connection: close
-Content-Type: text/html; charset=utf-8
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data:
-Cache-Control: no-cache,no-store
-Pragma: no-cache
-Content-Length: 38750
-Set-Cookie: _TESTCOOKIESUPPORT=1; PATH=/; HttpOnly
-X-Frame-Options: DENY
-
-21-07-16 22:55:36; iteration 5; addr=http://173.194.222.113:
-HTTP/1.1 301 Moved Permanently
-Location: http://www.google.com/
-Content-Type: text/html; charset=UTF-8
-Date: Fri, 16 Jul 2021 19:55:36 GMT
-Expires: Sun, 15 Aug 2021 19:55:36 GMT
-Cache-Control: public, max-age=2592000
-Server: gws
-Content-Length: 219
-X-XSS-Protection: 0
-X-Frame-Options: SAMEORIGIN
-
-21-07-16 22:55:36; iteration 4; addr=http://173.194.222.113:
-HTTP/1.1 301 Moved Permanently
-Location: http://www.google.com/
-Content-Type: text/html; charset=UTF-8
-Date: Fri, 16 Jul 2021 19:55:36 GMT
-Expires: Sun, 15 Aug 2021 19:55:36 GMT
-Cache-Control: public, max-age=2592000
-Server: gws
-Content-Length: 219
-X-XSS-Protection: 0
-X-Frame-Options: SAMEORIGIN
-
-21-07-16 22:55:36; iteration 3; addr=http://173.194.222.113:
-HTTP/1.1 301 Moved Permanently
-Location: http://www.google.com/
-Content-Type: text/html; charset=UTF-8
-Date: Fri, 16 Jul 2021 19:55:36 GMT
-Expires: Sun, 15 Aug 2021 19:55:36 GMT
-Cache-Control: public, max-age=2592000
-Server: gws
-Content-Length: 219
-X-XSS-Protection: 0
-X-Frame-Options: SAMEORIGIN
-
-21-07-16 22:55:36; iteration 2; addr=http://173.194.222.113:
-HTTP/1.1 301 Moved Permanently
-Location: http://www.google.com/
-Content-Type: text/html; charset=UTF-8
-Date: Fri, 16 Jul 2021 19:55:36 GMT
-Expires: Sun, 15 Aug 2021 19:55:36 GMT
-Cache-Control: public, max-age=2592000
-Server: gws
-Content-Length: 219
-X-XSS-Protection: 0
-X-Frame-Options: SAMEORIGIN
-
-21-07-16 22:55:36; iteration 1; addr=http://173.194.222.113:
-HTTP/1.1 301 Moved Permanently
-Location: http://www.google.com/
-Content-Type: text/html; charset=UTF-8
-Date: Fri, 16 Jul 2021 19:55:36 GMT
-Expires: Sun, 15 Aug 2021 19:55:36 GMT
-Cache-Control: public, max-age=2592000
-Server: gws
-Content-Length: 219
-X-XSS-Protection: 0
-X-Frame-Options: SAMEORIGIN
-
-21-07-16 22:55:36; iteration 5; addr=http://87.250.250.242:
-HTTP/1.1 406 Not acceptable
-Connection: Close
-Content-Length: 0
-
-21-07-16 22:55:36; iteration 4; addr=http://87.250.250.242:
-HTTP/1.1 406 Not acceptable
-Connection: Close
-Content-Length: 0
-
-21-07-16 22:55:36; iteration 3; addr=http://87.250.250.242:
-HTTP/1.1 406 Not acceptable
-Connection: Close
-Content-Length: 0
-
-21-07-16 22:55:36; iteration 2; addr=http://87.250.250.242:
-HTTP/1.1 406 Not acceptable
-Connection: Close
-Content-Length: 0
-
-21-07-16 22:55:36; iteration 1; addr=http://87.250.250.242:
-HTTP/1.1 406 Not acceptable
-Connection: Close
-Content-Length: 0
+	изменено:      contributing.md
+```
+* Теперь запустим скрипт:
+```shell
+lerekler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory home/lerekler/gitProjects/gitNetology
+Проверяемая директория:/home/lerekler/gitProjects/gitNetology
+------Файлы-------
+изменено:
+*   contributing.md
 ```
 
-## 4. Необходимо дописать скрипт из предыдущего задания так, чтобы он выполнялся до тех пор, пока один из узлов не окажется недоступным. Если любой из узлов недоступен - IP этого узла пишется в файл error, скрипт прерывается
+Вроде работает =)
 
-*   Продолжим с `192.168.1.1`. Скрипт обновленный:
-```shell
-#!/bin/bash
-server_address_array=("192.168.1.1" "173.194.222.113" "87.250.250.242")
-declare -i tmpcheck=0                             # переменная для передачи состояния соединения первому циклу
-declare -i http_status                            # переменная для хранения значения статуса ответа сервера
-for (( i=0; i <${#server_address_array[@]}; i++ ))
-do
-n=5	                                              # итератор
-echo "http://${server_address_array[$i]}"         # выводим на консоль адрес
-	while (($n > 0))
-	do
-		http_status=$( curl -I http://${server_address_array[$i]} 2>/dev/null | head -n 1 | cut -d$' ' -f2 )  # записываем числовой http-ответ от сервера, к которому обращаемся
-		echo "http_status=$http_status"                                                                       # для наглядности выводим его в консоль
-		declare -i answ=$(($http_status/100))		                                                          # проверяем, к какому сотне относится наш ответ от сервера (2xx: Success (успешно)
-		if  [ "$answ" -ne 2 ];                                                                                # если ответ не относится к 2-й сотне, то переходим к прерыванию работы скрипта
-		then
-			echo "$( date ); http status: $http_status; ip: http://${server_address_array[$i]}">>error.log    # в лог пишем дату, текущий http-статус ответа и адрес
-			tmpcheck=1                                                                                        # переменной для передачи состояния присваиваем значение 1 
-			break                                                                                             # прерываем цикл
-		fi	
-		let "n -= 1"                  
-	done
-if [ "$tmpcheck" -eq 1 ]    # во внешнем цикле проверяем, если значение переменной равно 1, значит ответ от сервера был отличным от Success, проваливаемся внутрь условия 
-then break                  # прерываем цикл
-fi
-done
-```
-
-*   Выдадим права на исполнение и запустим скрипт:
-```shell
-$ chmod u+x ex4.1_03.sh 
-$ ./ex4.1_03.sh 
-http://192.168.1.1
-http_status=200
-http_status=200
-http_status=200
-http_status=200
-http_status=200
-http://173.194.222.113
-http_status=301
-```
-*   Проверим лог:
-```shell
-$ cat error.log 
-Пт июл 16 23:07:05 MSK 2021; http status: 301; ip: http://173.194.222.113
-```
