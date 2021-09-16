@@ -66,7 +66,7 @@ The push refers to repository [docker.io/lereklerik/ponysay-netology]
 latest: digest: sha256:0bd01ff424016cbadbcef9fb2a1da9b4793a7dfc7c39935d22032fd141685b31 size: 950
 ```
 * Ссылка на тег: [ponysay:latest](https://hub.docker.com/repository/registry-1.docker.io/lereklerik/ponysay-netology/tags?page=1&ordering=last_updated)
-* Pull: [pull_image_ponysay](docker pull lereklerik/ponysay-netology)
+* Pull: docker pull lereklerik/ponysay-netology
 
 ## Задача 2
 
@@ -119,7 +119,7 @@ $ docker run -p 8081:8080 -p 50001:50000 -w /usr/lib/jenkins/ -ti lereklerik/jen
 ![startpage](pictures/amazon_startpage_jenkins.png)
 
 * Ссылка на тег: [amazon_jenkins_tag](https://hub.docker.com/repository/docker/lereklerik/jenkins_amazon/tags?page=1&ordering=last_updated)
-* Pull: [pull](docker pull lereklerik/jenkins_amazon)
+* Pull: docker pull lereklerik/jenkins_amazon
 
 ---------------------------------------------------------------------
 
@@ -161,7 +161,7 @@ webroot: $user.home/.jenkins
 P.S. Донастраивать jenkins с ubuntu не буду, т.к. это достаточно долго + по amazon первую страницу с ним продемонстрировала
 
 * Ссылка на тег: [ubuntu_jenkins_tag](https://hub.docker.com/repository/docker/lereklerik/jenkins_ubuntu/tags?page=1&ordering=last_updated)
-* Pull: [pull](docker pull lereklerik/jenkins_ubuntu)
+* Pull: docker pull lereklerik/jenkins_ubuntu
 
 ## Задача 3
 
@@ -301,4 +301,4 @@ root@a7ed7155c3af:/# curl 172.17.0.2:3000/
 ![img.png](pictures/curl_end.png)
 
 * Ссылка на тег: [nodeja_tags](https://hub.docker.com/repository/docker/lereklerik/nodejs/tags?page=1&ordering=last_updated)
-* Pull: [pull_nodejs](docker pull lereklerik/nodejs)
+* Pull: docker pull lereklerik/nodejs
