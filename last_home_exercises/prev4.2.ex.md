@@ -119,7 +119,7 @@ ler@PAVILION:~/gitProjects/devops-netology$ (main)/home/lerekler/test.py
 Проверяемая директория:~/gitProjects/devops-netology
 ------Файлы-------
 изменено:
-*   next_home_exercises/getChgFiles.py
+*   6.1exercise/getChgFiles.py
 *   prev4.2.ex.md
 удалено:
 *   first.txt
@@ -128,7 +128,7 @@ ler@PAVILION:~/gitProjects/devops-netology$ (main)/home/lerekler/test.py
 скопировано:
 *   prev4.2.ex.md -> last_home_exercises/prev4.1ex.md
 новый файл:
-*   next_home_exercises/getChgFiles.py
+*   6.1exercise/getChgFiles.py
 *   pictures/4.2.2_py.png
 *   pictures/4.2_py.png
 ```    
