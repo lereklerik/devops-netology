@@ -432,7 +432,7 @@ Frame 1115: 68 bytes on wire (544 bits), 68 bytes captured (544 bits)
     Epoch Time: 1624539628.608056000 seconds
     [Time delta from previous captured frame: 0.038908000 seconds]
     [Time delta from previous displayed frame: 0.038908000 seconds]
-    [Time since reference or first frame: 7.552895000 seconds]
+    [Time since reference or 1-2exercises frame: 7.552895000 seconds]
     Frame Number: 1115
     Frame Length: 68 bytes (544 bits)
     Capture Length: 68 bytes (544 bits)

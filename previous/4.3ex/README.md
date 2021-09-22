@@ -4,7 +4,7 @@
 ```json
 { "info" : "Sample JSON output from our service\t",
     "elements" :[
-        { "name" : "first",
+        { "name" : "1-2exercises",
         "type" : "server",
         "ip" : 7175 
         },
@@ -21,7 +21,7 @@
 ```json
 { "info" : "Sample JSON output from our service\t",
     "elements" :[
-        { "name" : "first",
+        { "name" : "1-2exercises",
         "type" : "server",
         "ip" : 7175
         },
@@ -43,7 +43,7 @@
 * Также выделила отдельный файл с перечислением сервисов, которые были введены пользователем. По его содержимому и пробегаюсь в поисках повторно введенного сервиса.
 
 #### Скрипт:
-Сам скрипт: [service_markup_script](../scripts/getIpWebServiceMarkup.py)
+Сам скрипт: [service_markup_script](../../scripts/getIpWebServiceMarkup.py)
 ```python
 #!/usr/bin/env python3
 

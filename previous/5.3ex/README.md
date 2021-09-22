@@ -108,7 +108,7 @@ WorkFolder/docker-projects/test-httpd# docker exec -ti netology-httpd bash
 </html>
 root@52f48d154c1f:/usr/local/apache2/htdocs# 
 ```
-* Проверим вывод [index.html](../pictures/01_httpd_indexhtml.png)
+* Проверим вывод [index.html](../../pictures/01_httpd_indexhtml.png)
 * Создала репозиторий на `docker hub` [netology-httpd](https://hub.docker.com/r/lereklerik/netology-httpd)
 * Связала тег с образом:
 ```shell

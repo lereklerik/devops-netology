@@ -44,7 +44,7 @@ Successfully tagged archpony:latest
 ```shell
 docker run -ti --name ponystart archpony:latest
 ```
-* Результат: ![pony](pictures/ponysay.png)
+* Результат: ![pony](../../pictures/ponysay.png)
 
 * P.S. вышло очень символично, что пони в медицинской шапочке, т.к. с `archlinux` намучилась и хотелось вызвать санитаров)
 
@@ -109,14 +109,14 @@ CMD ["/bin/bash"]
 ```shell
 $ docker build -t lereklerik/jenkins_amazon:ver1 -f DockerFileCorretto .
 ```
-![Build docker](pictures/amazon_setup_jenkins0.png)
+![Build docker](../../pictures/amazon_setup_jenkins0.png)
 ```shell
 $ docker run -p 8081:8080 -p 50001:50000 -w /usr/lib/jenkins/ -ti lereklerik/jenkins_amazon:ver1 java -jar jenkins.war
 ```
-![Run docker](pictures/amazon_setup_jenkins.png)
+![Run docker](../../pictures/amazon_setup_jenkins.png)
 * Результат:
-![Login amazon_jenkins](pictures/amazon_login_jenkins.png)
-![startpage](pictures/amazon_startpage_jenkins.png)
+![Login amazon_jenkins](../../pictures/amazon_login_jenkins.png)
+![startpage](../../pictures/amazon_startpage_jenkins.png)
 
 * Ссылка на тег: [amazon_jenkins_tag](https://hub.docker.com/repository/docker/lereklerik/jenkins_amazon/tags?page=1&ordering=last_updated)
 * Pull: docker pull lereklerik/jenkins_amazon
@@ -145,18 +145,18 @@ $ docker build -t lereklerik/jenkins_ubuntu:ver2 -f DockerFileUbuntu .
 Successfully built d14a35d9f902
 Successfully tagged lereklerik/jenkins_ubuntu:ver2
 ```
-![Build docker](pictures/ubuntu_setup_jenkins0.png)
+![Build docker](../../pictures/ubuntu_setup_jenkins0.png)
 
 ```shell
 docker run -p 8082:8080 -p 50002:50000 -w /usr/share/jenkins/ -ti lereklerik/jenkins_ubuntu:ver2 java -jar jenkins.war
 Running from: /usr/share/jenkins/jenkins.war
 webroot: $user.home/.jenkins
 ```
-![Run docker](pictures/ubuntu_setup_jenkins1.png)
+![Run docker](../../pictures/ubuntu_setup_jenkins1.png)
 
 * Результат:
-![Start page #1](pictures/ubuntu_login_jenkins0.png)
-![Start page #2](pictures/ubuntu_login_jenkins1.png)
+![Start page #1](../../pictures/ubuntu_login_jenkins0.png)
+![Start page #2](../../pictures/ubuntu_login_jenkins1.png)
 
 P.S. Донастраивать jenkins с ubuntu не буду, т.к. это достаточно долго + по amazon первую страницу с ним продемонстрировала
 
@@ -234,9 +234,9 @@ a7ed7155c3af   ubuntu              "bash"                   About a minute ago  
 d8bb6b508a19   lereklerik/nodejs   "docker-entrypoint.s…"   About a minute ago   Up About a minute   0.0.0.0:3000->3000/tcp, :::3000->3000/tcp   reverent_wiles
 ```
 * Список сетей:
-![network_list](pictures/listnetwork.png)
+![network_list](../../pictures/listnetwork.png)
 * Просмотр нашей сети:
-![bridge](pictures/bridge.png)
+![bridge](../../pictures/bridge.png)
 ```shell
 lerekler@lerekler-Pavilion:~/Learning/WorkFolder/docker-projects/5.4exercise_test$ docker network inspect bridge
 [
@@ -297,8 +297,8 @@ lerekler@lerekler-Pavilion:~/Learning/WorkFolder/docker-projects/5.4exercise_tes
 root@a7ed7155c3af:/# curl 172.17.0.2:3000/
 <!DOCTYPE html><html lang="en"><head><title>Node.js demo</title><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"><link rel="shortcut icon" href="/favicon.png"><link rel="stylesheet" href="/index.css"><script type="text/javascript" src="/jquery.js"></script><script type="text/javascript">$(document).ready(function() {
 ```
-![curl_start](pictures/curl1.png)
-![img.png](pictures/curl_end.png)
+![curl_start](../../pictures/curl1.png)
+![img.png](../../pictures/curl_end.png)
 
 * Ссылка на тег: [nodeja_tags](https://hub.docker.com/repository/docker/lereklerik/nodejs/tags?page=1&ordering=last_updated)
 * Pull: docker pull lereklerik/nodejs

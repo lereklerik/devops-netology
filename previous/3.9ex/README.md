@@ -24,8 +24,8 @@ HA Enabled      false
 ## 2. Запустить Vault-сервер в dev-режиме (дополнив ключ -dev упомянутым выше -dev-listen-address, если хотите увидеть UI).
 
 *   Работа из браузера:
-    *   [screenshot1](../pictures/vault_starting.png)
-    *   [screenshot2](../pictures/vault_starting2.png)
+    *   [screenshot1](../../pictures/vault_starting.png)
+    *   [screenshot2](../../pictures/vault_starting2.png)
  
 ---------------------------------------------------------
 ### *Однако с 0.0.0.0:8200 у меня не подписывался промежуточный сертификат. Поэтому от UI было принято решение отказаться*
@@ -489,5 +489,5 @@ Accept-Ranges: bytes
 
 *   С протоколом `ACME` и CA `Let's enscrypt` знакомы, т.к. во владении есть домен [bikepower.ddns.net](https://bikepower.ddns.net/). Используем, в частности, как домашнее облако `nextcloud`
 *   Сертификат устанавливали по рекомендациям с [losst](https://losst.ru/kak-poluchit-sertifikat-let-s-encrypt) ещё до начала моего обучения на курсе)
-[cert_bikepower](../pictures/bikepower.png)
+[cert_bikepower](../../pictures/bikepower.png)
 

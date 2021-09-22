@@ -50,7 +50,7 @@ for result in result_os.split('\n'):
 ```
 ## Этим скриптом недовольно начальство, потому что в его выводе есть не все изменённые файлы, а также непонятен полный путь к директории, где они находятся. Как можно доработать скрипт ниже, чтобы он исполнял требования вашего руководителя?
 
-*   Проверим изменения в локальном репозитории: [git status](../pictures/4.2_py.png)
+*   Проверим изменения в локальном репозитории: [git status](../../pictures/4.2_py.png)
 ```shell
 На ветке main
 Ваша ветка опережает «gitlab/main» на 34 коммита.
@@ -59,10 +59,10 @@ for result in result_os.split('\n'):
 Изменения, которые будут включены в коммит:
   (используйте «git reset HEAD <файл>…», чтобы убрать из индекса)
 
-	изменено:      prev4.2.ex.md
-	удалено:       first.txt
+	изменено:      README.md
+	удалено:       1-2exercises.txt
 	удалено:       has_been_moved.txt
-	скопировано:   prev4.2.ex.md -> last_home_exercises/prev4.1ex.md
+	скопировано:   README.md -> last_home_exercises/README.md
 	удалено:       last_home_exercises/test.txt
 
 Изменения, которые не в индексе для коммита:
@@ -70,13 +70,13 @@ for result in result_os.split('\n'):
   (используйте «git checkout -- <файл>…», чтобы отменить изменения
    в рабочем каталоге)
 
-	изменено:      prev4.2.ex.md
+	изменено:      README.md
 ```
 
 *   Проанализировав скрипт, поняла, что в моем случае придется проверять ещё и кириллицу в статусах, т.к. `git` у меня для ленивых, и все пишет на русском.
 *   Также, `git` отслеживает не только модифицируемые файлы, а еще и удаленные, новые или перемещаемые. В целом, мой вариант учел все такие ситуации.
 *   Учитывая, что нет смысла выводить данные в таком же виде, что выводит нам `git status`, позволила себе несколько усложнить скрипт, добавив сбор данных по файлам в словарь, который в итоге и вывожу в консоли
-*   Скрипт [script_vim](../pictures/4.2.2_py.png):
+*   Скрипт [script_vim](../../pictures/4.2.2_py.png):
 ```python
 #!/usr/bin/env  python3
 
@@ -119,21 +119,21 @@ ler@PAVILION:~/gitProjects/devops-netology$ (main)/home/lerekler/test.py
 Проверяемая директория:~/gitProjects/devops-netology
 ------Файлы-------
 изменено:
-*   6.1exercise/getChgFiles.py
-*   prev4.2.ex.md
+*   6.1ex/getChgFiles.py
+*   README.md
 удалено:
-*   first.txt
+*   1-2exercises.txt
 *   last_home_exercises/test.txt
 *   has_been_moved.txt
 скопировано:
-*   prev4.2.ex.md -> last_home_exercises/prev4.1ex.md
+*   README.md -> last_home_exercises/README.md
 новый файл:
-*   6.1exercise/getChgFiles.py
+*   6.1ex/getChgFiles.py
 *   pictures/4.2.2_py.png
 *   pictures/4.2_py.png
 ```    
 *   Как видно, предыдущий файл README.md с прошлой домашней работы я перекладываю в другую папку и переименовываю
-*   Сам скрипт присутствует в проекте [getChgFiles](../scripts/getChgFiles.py)
+*   Сам скрипт присутствует в проекте [getChgFiles](../../scripts/getChgFiles.py)
 
 P.S. Python только стала изучать, по стилистике и коду могут быть провалы, т.к. в основном программирую на Java, но стараюсь
 
@@ -143,7 +143,7 @@ P.S. Python только стала изучать, по стилистике и
 * Помимо этого требуется проверить, что путь существует и вообще является путем, здесь также воспользуемся модулем `os.path`
 * Для передачи пути используем модуль `sys`
 * Сбор наименований измененных файлов в словарь вынесем в отдельный метод `get_file_dict()`
-* Скрипт [getChgFilesOtherDirectory](../scripts/getChgFilesOtherDirectory.py):
+* Скрипт [getChgFilesOtherDirectory](../../scripts/getChgFilesOtherDirectory.py):
 
 ```python
 #!/usr/bin/env  python3
@@ -218,13 +218,13 @@ ler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory home/lerekler/gitProjects/
 изменено:
 *   scripts/getChgFilesOtherDirectory.py
 *   scripts/getChgFiles.py
-*   prev4.2.ex.md
+*   README.md
 удалено:
-*   first.txt
+*   1-2exercises.txt
 *   last_home_exercises/test.txt
 *   has_been_moved.txt
 скопировано:
-*   prev4.2.ex.md -> last_home_exercises/prev4.1ex.md
+*   README.md -> last_home_exercises/README.md
 новый файл:
 *   scripts/getChgFilesOtherDirectory.py
 *   scripts/getChgFiles.py
@@ -265,7 +265,7 @@ ler@PAVILION:~/Documents$ ./getChgFilesOtherDirectory home/lerekler/gitProjects/
 * Второе, что я поняла, что если писать все самостоятельно, без использования сторонних библиотек, то выглядит громоздко и непонятно. 
 * Третье - если хост не будет найден, вылетит **exception**, а его надо обработать.
 * Четвертое - вынесла некоторые реализации в отдельные функции. К примеру, это было необходимо при открытии файла на чтение, т.к. при манипуляции с файлом неоднократное открытие файла с разными модификаторами приводит не к тем результатам, которых от них ожидаешь
-* В итоге получился такой скрипт ([getIpWebService](../scripts/getIpWebService.py)):
+* В итоге получился такой скрипт ([getIpWebService](../../scripts/getIpWebService.py)):
 ```python
 #!/usr/bin/env python3
 
@@ -336,7 +336,7 @@ if current_ip:
         print(f'<{check_dns_service}> - <{current_ip}>')                            # при условии, что сервис найден в файле и ip не менялся, лишний раз файл на чтение не открываю, вывожу найденные значения выше 
 ```
 
-* Посмотрим в действии. Скрипт положила в отдельную папку, которая пока не содержит в себе нужный нам файл [screen_ls](../pictures/4.2.4_2py.png):
+* Посмотрим в действии. Скрипт положила в отдельную папку, которая пока не содержит в себе нужный нам файл [screen_ls](../../pictures/4.2.4_2py.png):
 ```shell
 ler@PAVILION:~/WorkFolder/scripts$ ls -l
 итого 52
