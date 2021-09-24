@@ -97,7 +97,7 @@ Type "help" for help.
 postgres=# 
 ```
 ---------------------------------------------------------------------------------
-![postgres welcome](../pictures/postges_welcome.png)
+![postgres welcome](../../pictures/postges_welcome.png)
 
 ---------------------------------------------------------------------------------
 
@@ -144,19 +144,19 @@ You are now connected to database "test_db" as user "postgres".
 ---------------------------------------------------------------------------------
 * Список БД:
 
-![list_Db](../pictures/list_db.png)
+![list_Db](../../pictures/list_db.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 * Describe table `orders`:
 
-![describe_orders](../pictures/describe_orders.png)
+![describe_orders](../../pictures/describe_orders.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 * Describe table `clients`:
 
-![describe_clients](../pictures/describe_clients.png)
+![describe_clients](../../pictures/describe_clients.png)
 
 ---------------------------------------------------------------------------------
 * SQL-запрос для выдачи списка пользователей с правами над таблицами test_db
@@ -168,12 +168,12 @@ You are now connected to database "test_db" as user "postgres".
           _**AND**_ table_name _**IN**_ ('clients', 'orders');
 
 ---------------------------------------------------------------------------------
-![sysinforole](../pictures/information_roles.png)
+![sysinforole](../../pictures/information_roles.png)
 
 ---------------------------------------------------------------------------------
 * Список пользователей с правами над таблицами test_db
 
-![du_postgres](../pictures/list_users_du.png)
+![du_postgres](../../pictures/list_users_du.png)
 
 ---------------------------------------------------------------------------------
 
@@ -185,13 +185,13 @@ You are now connected to database "test_db" as user "postgres".
 ---------------------------------------------------------------------------------
 * Заполнили:
 
-![data01](../pictures/data_01_postgres.png)
+![data01](../../pictures/data_01_postgres.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 * Количество записей по таблицам:
 
-![data02](../pictures/data_02_postgres.png)
+![data02](../../pictures/data_02_postgres.png)
 
 ---------------------------------------------------------------------------------
 
@@ -226,19 +226,19 @@ You are now connected to database "test_db" as user "postgres".
 ---------------------------------------------------------------------------------
 * Добавим записи:
 
-![data03](../pictures/data_03_postgres.png)
+![data03](../../pictures/data_03_postgres.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 * Посмотрим тех клиентов, кто сделал заказ:
 
-![data04](../pictures/data_04_postgres.png)
+![data04](../../pictures/data_04_postgres.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 * Посмотрим, какие заказы они сделали:
 
-![img.png](../pictures/data_05_postgres.png)
+![img.png](../../pictures/data_05_postgres.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
@@ -266,7 +266,7 @@ You are now connected to database "test_db" as user "postgres".
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
-![explain](../pictures/data_06_postgres.png)
+![explain](../../pictures/data_06_postgres.png)
 
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
@@ -288,7 +288,7 @@ You are now connected to database "test_db" as user "postgres".
 ```shell
 docker run --volume /var/lib/data/postgres:/var/lib/postgresql/data --volume $(pwd):/backup ubuntu tar cvf backupvol.tar --absolute-names /var/lib/postgresql/data
 ```
-![empty_tar](../pictures/empty_tar_postgres.png)
+![empty_tar](../../pictures/empty_tar_postgres.png)
 
 * Долго билась с этим, но поняла, что не хватает теории в части составления файла `docker-compose` и работы с `volumes`.
 * Поэтому я забэкапила саму базу таким образом:
@@ -351,7 +351,7 @@ Password for user postgres:
 psql (12.8 (Ubuntu 12.8-0ubuntu0.20.04.1))
 Type "help" for help.
 ```
-![newdb](../pictures/finishscreen_terminal_postgres.png)
+![newdb](../../pictures/finishscreen_terminal_postgres.png)
 
 * DBeaver:
 
