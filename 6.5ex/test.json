@@ -1,0 +1,35 @@
+{
+  "snapshot": {
+    "snapshot": "elasticsearch",
+    "uuid": "DSq14SQIQuKv3QSSYbNunA",
+    "repository": "netology_backup",
+    "version_id": 7150099,
+    "version": "7.15.0",
+    "indices": [
+      ".geoip_databases",
+      "test"
+    ],
+    "data_streams": [],
+    "include_global_state": true,
+    "state": "SUCCESS",
+    "start_time": "2021-09-30T18:27:10.767Z",
+    "start_time_in_millis": 1633026430767,
+    "end_time": "2021-09-30T18:27:11.968Z",
+    "end_time_in_millis": 1633026431968,
+    "duration_in_millis": 1201,
+    "failures": [],
+    "shards": {
+      "total": 2,
+      "failed": 0,
+      "successful": 2
+    },
+    "feature_states": [
+      {
+        "feature_name": "geoip",
+        "indices": [
+          ".geoip_databases"
+        ]
+      }
+    ]
+  }
+}
