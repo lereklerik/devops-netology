@@ -59,10 +59,10 @@ commands will detect it and remind you to do so if necessary.
 
 -----------------------------------------------------------------
 ### AWS
-* [main.tf](7.2ex/terraform_aws/aws/main.tf)
-* [versions.tf](7.2ex/terraform_aws/aws/versions.tf)
-* [output.tf](7.2ex/terraform_aws/aws/outputs.tf)
-* [variables.tf](7.2ex/terraform_aws/aws/variables.tf)
+* [main.tf](Terraform/aws/main.tf) 
+* [versions.tf](Terraform/aws/versions.tf)
+* [output.tf](Terraform/aws/outputs.tf)
+* [variables.tf](Terraform/aws/variables.tf)
 
 * Глобальные переменные вынесла в `bashrc`
 * Установленная версия `terraform` для `aws`:
@@ -412,7 +412,7 @@ instance_public_ip = "3.70.185.191"
 -----------------------------------------------------------------
 ### YANDEX
 * С яндексом ознакомилась, но пока не уверена, что всё верно. `AWS` забрал много времени
-* [main.tf](7.2ex/terraform_yandex/yandex/main.tf)
+* [main.tf](Terraform/yandex/main.tf)
 * Глобальные переменные вынесла в `bashrc`
 * Установленная версия `terraform` для `yandex`:
 ```shell
@@ -491,5 +491,5 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 * CloudFormation
 ### Ссылки на конфигурации:
 
-* [конфигурация aws](7.2ex/terraform_aws/aws)
-* [конфигурация yandex](7.2ex/terraform_yandex/yandex)
+* [конфигурация aws](Terraform/aws)
+* [конфигурация yandex](Terraform/yandex)
