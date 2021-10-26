@@ -44,7 +44,7 @@
                 "AWS": "arn:aws:iam::---:root"
             },
             "Action": "s3:ListBucket",
-            "Resource": "arn:aws:s3:eu-central-1:---:accesspoint/lerbucketpoint"
+            "Resource": "arn:aws:s3:eu-central-1:---:accesspoint/<namepoint>"
         },
         {
             "Effect": "Allow",
@@ -55,7 +55,7 @@
                 "s3:GetObject",
                 "s3:PutObject"
             ],
-            "Resource": "arn:aws:s3:eu-central-1:---:accesspoint/lerbucketpoint/object/lerekler/*"
+            "Resource": "arn:aws:s3:eu-central-1:---:accesspoint/<namepoint>/object/<iam role>/*"
         }
     ]
 }
@@ -318,9 +318,9 @@ Outputs:
 account_id = "---"
 caller_arn = "arn:aws:iam::---:root"
 caller_user = "---"
-instance_id = "i-0652246193d7f822d"
-instance_ip_addr = "172.31.8.29"
-instance_public_ip = "18.197.22.169"
+instance_id = "i-06522461---822d"
+instance_ip_addr = "172.--.8.29"
+instance_public_ip = "18.--.22.169"
 
 
 ```
@@ -413,7 +413,7 @@ provider "aws" {
   region  = "eu-central-1"
   allowed_account_ids = ["---"]
   shared_credentials_file = "$HOME/.aes/credentials"
-  profile = "lereklerik"
+  profile = "******"
 }
 
 
