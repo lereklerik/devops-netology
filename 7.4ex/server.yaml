@@ -1,0 +1,12 @@
+
+repos:
+- id: https://github.com/lereklerik/terraformcloud
+  allowed_overrides: [workflow]
+  allow_custom_workflows: true
+
+workflows:
+  default:
+    plan:
+      - init
+      - plan:
+          extra_args: ["false"]

@@ -1,0 +1,25 @@
+version: 3
+automerge: true
+delete_source_branch_on_merge: true
+projects:
+- dir: project1
+  workspace: stage
+- dir: project1
+  workspace: prod
+  autoplan:
+    when_modified: ["../modules/**/*.tf", "*.tf*"]
+    enabled: true
+  workflow: myworkflow
+workflows:
+  myworkflow:
+    plan:
+      steps:
+      - run: my-custom-command arg1 arg2
+      - init
+      - plan:
+          extra_args: ["false"]
+      - run: my-custom-command arg1 arg2
+    apply:
+      steps:
+      - run: echo hi
+      - apply
