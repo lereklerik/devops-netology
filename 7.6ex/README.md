@@ -18,8 +18,8 @@
 
 * На сайте это можно увидеть в виде предупреждения: [name_restrict](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sqs_queue#name)
 * Исходя из этого, стала искать и по репозиторию. Однако, в ветке `main` это было сделать проблематично, нашла в `master`: [validators.go](https://github.com/hashicorp/terraform-provider-aws/blob/b8b7fee0e5cf4b469d8d4d2a2dc01ed13654a03a/aws/validators.go#L1035)
-* 
-
+* Длина не должна превышать 80 символов. При этом, если очередь относится к `.fifo`, то 75 (без учета суффикса)
+ [name_fifo](https://github.com/hashicorp/terraform-provider-aws/blob/6076d5a60ec814b243bc45170d67cb268a39d927/internal/service/sqs/queue.go#L411)
 ----------------------------------------------------
 ##### Какому регулярному выражению должно подчиняться имя?
 
